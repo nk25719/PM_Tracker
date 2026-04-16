@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
+import { loadRowsWithFallback, persistRows } from "./storage";
 import {
   AlertTriangle,
   Bell,
@@ -244,10 +245,8 @@ export default function App() {
     notes: "",
   };
 
-  const [rows, setRows] = useState(() => {
-    const saved = localStorage.getItem("pm-tracker-rows");
-    const parsed = saved ? JSON.parse(saved) : initialData;
-    return parsed.map((row) => ({
+  const normalizeRows = (sourceRows) =>
+    sourceRows.map((row) => ({
       ...row,
       department: row.department || "",
       notes: row.notes || "",
@@ -255,7 +254,9 @@ export default function App() {
       lastPmDate: row.lastPmDate || "",
       completionDate: row.completionDate || "",
     }));
-  });
+
+  const [rows, setRows] = useState(() => normalizeRows(initialData));
+  const [storageReady, setStorageReady] = useState(false);
 
   const [search, setSearch] = useState("");
   const [hospitalFilter, setHospitalFilter] = useState("All");
@@ -268,8 +269,36 @@ export default function App() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    localStorage.setItem("pm-tracker-rows", JSON.stringify(rows));
-  }, [rows]);
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const loadedRows = await loadRowsWithFallback(initialData);
+        if (!cancelled) {
+          setRows(normalizeRows(loadedRows));
+          setStorageReady(true);
+        }
+      } catch (error) {
+        console.error("Failed to load PM tracker rows", error);
+        if (!cancelled) {
+          setRows(normalizeRows(initialData));
+          setStorageReady(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+
+    persistRows(rows).catch((error) => {
+      console.error("Failed to persist PM tracker rows", error);
+    });
+  }, [rows, storageReady]);
 
   const hospitals = useMemo(() => {
     const unique = Array.from(new Set(rows.map((r) => r.hospital).filter(Boolean)));
@@ -525,6 +554,7 @@ export default function App() {
     resetForm();
   }
 
+
   function badgeClass(status, overdueStatus) {
     if (status === "Completed") return "badge badge-completed";
     if (overdueStatus === "Overdue") return "badge badge-overdue";
@@ -539,7 +569,7 @@ export default function App() {
           <div>
             <h1 className="page-title">Preventive Maintenance Tracker</h1>
             <p className="subtitle">
-              Local PM dashboard with CSV import/export and reminder tracking.
+              Local PM dashboard using IndexedDB with local backup + CSV/JSON exports.
             </p>
           </div>
 
