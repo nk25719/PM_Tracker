@@ -13,7 +13,6 @@ export default function ContractTrackerView({
   contractFileInputRef,
   onImportContracts,
   onExportContractsCsv,
-  onExportContractsJson,
 }) {
   return (
     <div className="card contracts-view-card">
@@ -38,9 +37,6 @@ export default function ContractTrackerView({
         </button>
         <button className="button" onClick={onExportContractsCsv}>
           Export Contracts CSV
-        </button>
-        <button className="button" onClick={onExportContractsJson}>
-          Export Contracts JSON
         </button>
       </div>
 

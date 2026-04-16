@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { ArrowLeft, Bot, Building2, Copy, Mail, MessageSquare, Wrench } from "lucide-react";
+import { ArrowLeft, Bot, Building2, CheckSquare, Copy, Mail, MessageSquare, Square, Wrench } from "lucide-react";
 
 function buildEmailDraft(pendingRows, hospital, useAiTone = false) {
   const subject = `Preventive Maintenance Follow-up - ${hospital} (${pendingRows.length} pending item${pendingRows.length === 1 ? "" : "s"})`;
@@ -72,7 +72,7 @@ export default function HospitalDetailView({
   onSendHospitalEmail,
   onAddHospitalComment,
 }) {
-  const [selectedEquipmentId, setSelectedEquipmentId] = useState("all");
+  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState([]);
   const [copied, setCopied] = useState(false);
   const [copiedAiPrompt, setCopiedAiPrompt] = useState(false);
   const [copiedEngineerMessage, setCopiedEngineerMessage] = useState(false);
@@ -81,9 +81,10 @@ export default function HospitalDetailView({
   const [useAiTone, setUseAiTone] = useState(true);
 
   const selectedRows = useMemo(() => {
-    if (selectedEquipmentId === "all") return rows;
-    return rows.filter((row) => String(row.id) === String(selectedEquipmentId));
-  }, [rows, selectedEquipmentId]);
+    if (!selectedEquipmentIds.length) return rows;
+    const selectedSet = new Set(selectedEquipmentIds.map((id) => String(id)));
+    return rows.filter((row) => selectedSet.has(String(row.id)));
+  }, [rows, selectedEquipmentIds]);
 
   const pendingRows = useMemo(
     () => selectedRows.filter((row) => getTrackingMeta(row).effectiveStatus !== "Completed"),
@@ -91,9 +92,14 @@ export default function HospitalDetailView({
   );
 
   const selectedEquipment = useMemo(
-    () => rows.find((row) => String(row.id) === String(selectedEquipmentId)),
-    [rows, selectedEquipmentId]
+    () => (selectedRows.length === 1 ? selectedRows[0] : null),
+    [selectedRows]
   );
+
+  const allSelected = selectedEquipmentIds.length === rows.length && rows.length > 0;
+  const selectionLabel = selectedEquipmentIds.length
+    ? `${selectedEquipmentIds.length} manually selected`
+    : "All equipment selected";
 
   const emailDraft = pendingRows.length ? buildEmailDraft(pendingRows, hospital, useAiTone) : null;
   const generatedEmailText = emailDraft ? `Subject: ${emailDraft.subject}\n\n${emailDraft.body}` : "";
@@ -133,6 +139,23 @@ export default function HospitalDetailView({
   }, [selectedRows]);
 
   if (!hospital) return null;
+
+  function handleEquipmentMultiSelect(event) {
+    const values = Array.from(event.target.selectedOptions).map((option) => option.value);
+    if (values.includes("all")) {
+      setSelectedEquipmentIds([]);
+      return;
+    }
+    setSelectedEquipmentIds(values);
+  }
+
+  function handleToggleSelectAll() {
+    if (allSelected) {
+      setSelectedEquipmentIds([]);
+      return;
+    }
+    setSelectedEquipmentIds(rows.map((row) => String(row.id)));
+  }
 
   async function copyEmailDraft() {
     if (!generatedEmailText) return;
@@ -209,8 +232,8 @@ export default function HospitalDetailView({
 
       <div className="hospital-quick-actions compact-quick-actions">
         <div>
-          <label className="muted">Select equipment</label>
-          <select className="select" value={selectedEquipmentId} onChange={(event) => setSelectedEquipmentId(event.target.value)}>
+          <label className="muted">Select equipment (multi-select supported)</label>
+          <select className="select equipment-multiselect" multiple value={selectedEquipmentIds} onChange={handleEquipmentMultiSelect}>
             <option value="all">All equipment ({rows.length})</option>
             {rows.map((row) => (
               <option key={row.id} value={String(row.id)}>
@@ -218,6 +241,11 @@ export default function HospitalDetailView({
               </option>
             ))}
           </select>
+          <div className="selection-meta">{selectionLabel}</div>
+          <button className="button button-soft" onClick={handleToggleSelectAll}>
+            {allSelected ? <Square size={15} className="inline-icon" /> : <CheckSquare size={15} className="inline-icon" />}
+            {allSelected ? "Clear manual selection" : "Select all equipment"}
+          </button>
         </div>
 
         <div className="selection-meta">
@@ -273,88 +301,92 @@ export default function HospitalDetailView({
         />
       </div>
 
-      <div className="hospital-status-view">
-        <h3 className="section-title hospital-subsection-title">Equipment Status View</h3>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Equipment</th>
-                <th>Department</th>
-                <th>Next PM</th>
-                <th>Timing</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedRows.length ? (
-                selectedRows.map((row) => {
-                  const meta = getTrackingMeta(row);
-                  return (
-                    <tr key={row.id} className={selectedEquipmentId !== "all" ? "hospital-status-row-selected" : ""}>
-                      <td>
-                        <div className="strong">{row.equipment}</div>
-                        <div className="muted">{row.serial || "No serial"}</div>
-                      </td>
-                      <td>{row.department || "—"}</td>
-                      <td>{row.nextPmDate || "—"}</td>
-                      <td className="muted">
-                        {meta.isOverdue
-                          ? "Overdue"
-                          : meta.dueSoon7
-                            ? "Due within 7 days"
-                            : meta.dueSoon14
-                              ? "Due within 14 days"
-                              : "On schedule"}
-                      </td>
-                      <td>{meta.effectiveStatus}</td>
-                    </tr>
-                  );
-                })
-              ) : (
+      <div className="hospital-detail-layout">
+        <div className="hospital-status-view">
+          <h3 className="section-title hospital-subsection-title">Equipment Status View</h3>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
                 <tr>
-                  <td colSpan={5} className="muted">
-                    No equipment found for this hospital.
-                  </td>
+                  <th>Equipment</th>
+                  <th>Department</th>
+                  <th>Next PM</th>
+                  <th>Timing</th>
+                  <th>Status</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <form className="comment-form" onSubmit={handleAddComment}>
-        <div className="comment-form-head">
-          <div className="selection-meta">
-            <MessageSquare size={14} className="inline-icon" />
-            Notes for {selectedEquipment ? selectedEquipment.equipment : "all selected equipment"}
+              </thead>
+              <tbody>
+                {selectedRows.length ? (
+                  selectedRows.map((row) => {
+                    const meta = getTrackingMeta(row);
+                    return (
+                      <tr key={row.id} className={selectedEquipmentIds.length ? "hospital-status-row-selected" : ""}>
+                        <td>
+                          <div className="strong">{row.equipment}</div>
+                          <div className="muted">{row.serial || "No serial"}</div>
+                        </td>
+                        <td>{row.department || "—"}</td>
+                        <td>{row.nextPmDate || "—"}</td>
+                        <td className="muted">
+                          {meta.isOverdue
+                            ? "Overdue"
+                            : meta.dueSoon7
+                              ? "Due within 7 days"
+                              : meta.dueSoon14
+                                ? "Due within 14 days"
+                                : "On schedule"}
+                        </td>
+                        <td>{meta.effectiveStatus}</td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="muted">
+                      No equipment found for this hospital.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-          <input className="input" value={commentBy} onChange={(event) => setCommentBy(event.target.value)} placeholder="Added by" />
         </div>
-        <textarea
-          className="input textarea"
-          value={commentText}
-          onChange={(event) => setCommentText(event.target.value)}
-          placeholder="Add a follow-up note. It will be saved in the selected equipment communication history."
-        />
-        <button className="button" type="submit">Add note to history</button>
-      </form>
 
-      <div className="com-history-wrap">
-        <h3 className="section-title hospital-subsection-title">COM History (selected view)</h3>
-        {communicationTimeline.length ? (
-          <div className="history-list">
-            {communicationTimeline.slice(0, 40).map((entry, idx) => (
-              <div key={`${entry.type}-${entry.at || entry.date}-${idx}`} className="history-item">
-                <div className="strong">{entry.type.toUpperCase()} · {entry.equipment || "General"}</div>
-                <div className="muted">{entry.serial || "No serial"} · {entry.by || entry.updatedBy || "System"} · {entry.at || entry.date || "Unknown date"}</div>
-                <div>{entry.note || entry.notes || entry.subject || "No details"}</div>
+        <div className="hospital-history-pane">
+          <form className="comment-form" onSubmit={handleAddComment}>
+            <div className="comment-form-head">
+              <div className="selection-meta">
+                <MessageSquare size={14} className="inline-icon" />
+                Notes for {selectedEquipment ? selectedEquipment.equipment : "all selected equipment"}
               </div>
-            ))}
+              <input className="input" value={commentBy} onChange={(event) => setCommentBy(event.target.value)} placeholder="Added by" />
+            </div>
+            <textarea
+              className="input textarea"
+              value={commentText}
+              onChange={(event) => setCommentText(event.target.value)}
+              placeholder="Add a follow-up note. It will be saved in the selected equipment communication history."
+            />
+            <button className="button" type="submit">Add note to history</button>
+          </form>
+
+          <div className="com-history-wrap com-history-major">
+            <h3 className="section-title hospital-subsection-title">COM History (selected view)</h3>
+            {communicationTimeline.length ? (
+              <div className="history-list">
+                {communicationTimeline.slice(0, 40).map((entry, idx) => (
+                  <div key={`${entry.type}-${entry.at || entry.date}-${idx}`} className="history-item">
+                    <div className="strong">{entry.type.toUpperCase()} · {entry.equipment || "General"}</div>
+                    <div className="muted">{entry.serial || "No serial"} · {entry.by || entry.updatedBy || "System"} · {entry.at || entry.date || "Unknown date"}</div>
+                    <div>{entry.note || entry.notes || entry.subject || "No details"}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="muted">No communication history yet for this selection.</div>
+            )}
           </div>
-        ) : (
-          <div className="muted">No communication history yet for this selection.</div>
-        )}
+        </div>
       </div>
     </div>
   );

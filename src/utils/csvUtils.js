@@ -233,15 +233,3 @@ export function exportRowsToCsv(rows, getIntervalMonths) {
   a.click();
   URL.revokeObjectURL(url);
 }
-
-export function exportRowsToJson(rows) {
-  const blob = new Blob([JSON.stringify(rows, null, 2)], {
-    type: "application/json",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "pm-tracker-data.json";
-  a.click();
-  URL.revokeObjectURL(url);
-}

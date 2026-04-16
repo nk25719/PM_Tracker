@@ -8,6 +8,8 @@ export default function DashboardCards({ metrics, timingFilter, onMetricFilterSe
 
   const totalIsActive = timingFilter === "All";
   const dueThisWeekIsActive = timingFilter === "Due this week";
+  const overdueIsActive = timingFilter === "Overdue only";
+  const completedIsActive = timingFilter === "Completed";
 
   return (
     <div className="metrics-grid">
@@ -25,7 +27,11 @@ export default function DashboardCards({ metrics, timingFilter, onMetricFilterSe
         </div>
       </button>
 
-      <div className="card">
+      <button
+        type="button"
+        className={`card metric-card-button ${overdueIsActive ? "metric-card-active" : ""}`}
+        onClick={() => handleCardClick("Overdue only")}
+      >
         <div className="metric-row">
           <div>
             <div className="metric-label">Overdue</div>
@@ -33,7 +39,7 @@ export default function DashboardCards({ metrics, timingFilter, onMetricFilterSe
           </div>
           <AlertTriangle />
         </div>
-      </div>
+      </button>
 
       <button
         type="button"
@@ -49,7 +55,11 @@ export default function DashboardCards({ metrics, timingFilter, onMetricFilterSe
         </div>
       </button>
 
-      <div className="card">
+      <button
+        type="button"
+        className={`card metric-card-button ${completedIsActive ? "metric-card-active" : ""}`}
+        onClick={() => handleCardClick("Completed")}
+      >
         <div className="metric-row">
           <div>
             <div className="metric-label">Completed</div>
@@ -57,7 +67,7 @@ export default function DashboardCards({ metrics, timingFilter, onMetricFilterSe
           </div>
           <CheckCircle2 />
         </div>
-      </div>
+      </button>
     </div>
   );
 }
