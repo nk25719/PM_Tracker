@@ -1,5 +1,5 @@
 import React from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 
 export default function EquipmentTable({
   rows,
@@ -9,6 +9,7 @@ export default function EquipmentTable({
   startEdit,
   handleDelete,
   markComplete,
+  onViewDetail,
 }) {
   return (
     <div className="card">
@@ -88,6 +89,10 @@ export default function EquipmentTable({
                       </button>
                       <button className="button" onClick={() => markComplete(row)}>
                         Complete
+                      </button>
+                      <button className="button" onClick={() => onViewDetail(row)}>
+                        <Eye size={14} className="inline-icon" />
+                        View
                       </button>
                       <button className="button" onClick={() => startEdit(row)}>
                         <Pencil size={14} className="inline-icon" />

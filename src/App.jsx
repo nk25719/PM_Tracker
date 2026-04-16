@@ -7,6 +7,8 @@ import EquipmentTable from "./components/EquipmentTable";
 import FiltersBar from "./components/FiltersBar";
 import HospitalSummary from "./components/HospitalSummary";
 import ImportExportBar from "./components/ImportExportBar";
+import EquipmentDetailModal from "./components/EquipmentDetailModal";
+import HospitalDetailView from "./components/HospitalDetailView";
 import {
   addMonths,
   getIntervalMonths,
@@ -131,6 +133,8 @@ export default function App() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [equipmentForm, setEquipmentForm] = useState(defaultEquipmentForm);
+  const [detailRow, setDetailRow] = useState(null);
+  const [selectedHospitalDetail, setSelectedHospitalDetail] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -182,6 +186,7 @@ export default function App() {
         row.lastPmDate,
         row.completionDate,
         row.engineer,
+        row.updatedBy,
       ]
         .join(" ")
         .toLowerCase()
@@ -221,9 +226,9 @@ export default function App() {
   const metrics = useMemo(() => {
     const total = rows.length;
     const overdue = rows.filter((r) => getTrackingMeta(r).isOverdue).length;
-    const dueSoon = rows.filter((r) => getTrackingMeta(r).dueSoon7).length;
+    const dueThisWeek = rows.filter((r) => getTrackingMeta(r).dueSoon7).length;
     const completed = rows.filter((r) => r.status === "Completed").length;
-    return { total, overdue, dueSoon, completed };
+    return { total, overdue, dueThisWeek, completed };
   }, [rows]);
 
   const byHospital = useMemo(() => {
@@ -241,6 +246,11 @@ export default function App() {
     return Object.entries(map).map(([hospital, values]) => ({ hospital, ...values }));
   }, [rows]);
 
+  const hospitalDetailRows = useMemo(
+    () => rows.filter((row) => row.hospital === selectedHospitalDetail),
+    [rows, selectedHospitalDetail]
+  );
+
   async function handleImportFile(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -248,12 +258,24 @@ export default function App() {
     const text = await file.text();
     const rawRows = parseCsvText(text);
     const imported = normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate);
-    if (imported.length) setRows(imported);
+    if (imported.length) setRows(normalizeRows(imported));
     event.target.value = "";
   }
 
-  function updateRow(id, patch) {
-    setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  function updateRow(id, patch, actor = "System") {
+    const today = getTodayIsoDate();
+    setRows((current) =>
+      current.map((row) =>
+        row.id === id
+          ? {
+              ...row,
+              ...patch,
+              updatedDate: today,
+              updatedBy: actor || row.updatedBy || row.engineer || "System",
+            }
+          : row
+      )
+    );
   }
 
   function handleFormChange(field, value) {
@@ -285,19 +307,35 @@ export default function App() {
   function markComplete(row) {
     const today = getTodayIsoDate();
     const intervalMonths = Math.max(1, Math.round(12 / (Number(row.pmsPerYear) || 1)));
+    const actor = row.engineer || row.updatedBy || "System";
 
-    updateRow(row.id, {
-      status: "Completed",
-      completionDate: today,
-      lastPmDate: today,
-      nextPmDate: addMonths(today, intervalMonths),
-    });
+    updateRow(
+      row.id,
+      {
+        status: "Completed",
+        completionDate: today,
+        lastPmDate: today,
+        nextPmDate: addMonths(today, intervalMonths),
+        pmHistory: [
+          ...(row.pmHistory || []),
+          {
+            date: today,
+            status: "Completed",
+            updatedBy: actor,
+            notes: "Marked complete from equipment table",
+          },
+        ],
+      },
+      actor
+    );
   }
 
   function handleSubmitEquipment(event) {
     event.preventDefault();
+    const today = getTodayIsoDate();
     const normalizedPmsPerYear = Number(equipmentForm.pmsPerYear) || 1;
     const intervalMonths = Math.max(1, Math.round(12 / normalizedPmsPerYear));
+    const actor = equipmentForm.updatedBy || equipmentForm.engineer || "System";
     const autoNextPmDate =
       equipmentForm.status === "Completed" && equipmentForm.completionDate
         ? addMonths(equipmentForm.completionDate, intervalMonths)
@@ -307,6 +345,7 @@ export default function App() {
       ...equipmentForm,
       pmsPerYear: normalizedPmsPerYear,
       nextPmDate: autoNextPmDate,
+      updatedBy: actor,
       lastPmDate:
         equipmentForm.status === "Completed" && equipmentForm.completionDate
           ? equipmentForm.completionDate
@@ -314,7 +353,30 @@ export default function App() {
     };
 
     if (editingId) {
-      updateRow(editingId, payload);
+      const existingRow = rows.find((row) => row.id === editingId);
+      const completionChanged =
+        payload.status === "Completed" &&
+        payload.completionDate &&
+        payload.completionDate !== existingRow?.completionDate;
+
+      updateRow(
+        editingId,
+        {
+          ...payload,
+          pmHistory: completionChanged
+            ? [
+                ...(existingRow?.pmHistory || []),
+                {
+                  date: payload.completionDate,
+                  status: "Completed",
+                  updatedBy: actor,
+                  notes: "Completed from edit form",
+                },
+              ]
+            : existingRow?.pmHistory || [],
+        },
+        actor
+      );
     } else {
       setRows((current) => [
         {
@@ -322,6 +384,20 @@ export default function App() {
           reminder1Sent: false,
           reminder2Sent: false,
           engineerAlertSent: false,
+          createdDate: today,
+          updatedDate: today,
+          updatedBy: actor,
+          pmHistory:
+            payload.status === "Completed" && payload.completionDate
+              ? [
+                  {
+                    date: payload.completionDate,
+                    status: "Completed",
+                    updatedBy: actor,
+                    notes: "Initial completed entry",
+                  },
+                ]
+              : [],
           ...payload,
         },
         ...current,
@@ -388,6 +464,7 @@ export default function App() {
                 </select>
                 <input className="input" placeholder="Engineer" value={equipmentForm.engineer} onChange={(e) => handleFormChange("engineer", e.target.value)} />
                 <input className="input" type="email" placeholder="Hospital Contact Email" value={equipmentForm.contactEmail} onChange={(e) => handleFormChange("contactEmail", e.target.value)} />
+                <input className="input" placeholder="Updated by" value={equipmentForm.updatedBy} onChange={(e) => handleFormChange("updatedBy", e.target.value)} />
               </div>
               <textarea className="input textarea" placeholder="Notes" value={equipmentForm.notes} onChange={(e) => handleFormChange("notes", e.target.value)} />
               <button className="button button-primary" type="submit">
@@ -414,6 +491,14 @@ export default function App() {
           statuses={statuses}
         />
 
+        {selectedHospitalDetail ? (
+          <HospitalDetailView
+            hospital={selectedHospitalDetail}
+            rows={hospitalDetailRows}
+            onClose={() => setSelectedHospitalDetail(null)}
+          />
+        ) : null}
+
         <div className="main-grid">
           <EquipmentTable
             rows={filteredRows}
@@ -423,6 +508,7 @@ export default function App() {
             startEdit={startEdit}
             handleDelete={handleDelete}
             markComplete={markComplete}
+            onViewDetail={setDetailRow}
           />
 
           <div className="side-grid">
@@ -444,10 +530,16 @@ export default function App() {
               </div>
             </div>
 
-            <HospitalSummary byHospital={byHospital} />
+            <HospitalSummary
+              byHospital={byHospital}
+              selectedHospital={selectedHospitalDetail}
+              onSelectHospital={setSelectedHospitalDetail}
+            />
           </div>
         </div>
       </div>
+
+      <EquipmentDetailModal row={detailRow} onClose={() => setDetailRow(null)} />
     </div>
   );
 }

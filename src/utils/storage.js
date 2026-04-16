@@ -1,3 +1,5 @@
+import { getTodayIsoDate } from "./dateUtils";
+
 export const statuses = [
   "All",
   "Upcoming",
@@ -16,7 +18,32 @@ export function normalizeStatus(status) {
   return editableStatuses.includes(status) ? status : "Upcoming";
 }
 
+function normalizePmHistory(row) {
+  if (Array.isArray(row.pmHistory)) return row.pmHistory;
+
+  const history = [];
+  if (row.lastPmDate) {
+    history.push({
+      date: row.lastPmDate,
+      status: "Completed",
+      notes: "Legacy PM entry",
+      updatedBy: row.updatedBy || row.engineer || "System",
+    });
+  }
+  if (row.completionDate && row.completionDate !== row.lastPmDate) {
+    history.push({
+      date: row.completionDate,
+      status: "Completed",
+      notes: "Completion entry",
+      updatedBy: row.updatedBy || row.engineer || "System",
+    });
+  }
+  return history;
+}
+
 export function normalizeRows(rows) {
+  const today = getTodayIsoDate();
+
   return rows.map((row) => ({
     ...row,
     department: row.department || "",
@@ -24,6 +51,10 @@ export function normalizeRows(rows) {
     reminderDates: row.reminderDates || "",
     lastPmDate: row.lastPmDate || "",
     completionDate: row.completionDate || "",
+    createdDate: row.createdDate || today,
+    updatedDate: row.updatedDate || row.createdDate || today,
+    updatedBy: row.updatedBy || row.engineer || "System",
+    pmHistory: normalizePmHistory(row),
     reminder1Sent: Boolean(row.reminder1Sent),
     reminder2Sent: Boolean(row.reminder2Sent),
     engineerAlertSent: Boolean(row.engineerAlertSent),
@@ -48,6 +79,7 @@ export function createDefaultEquipmentForm() {
     engineer: "",
     contactEmail: "",
     notes: "",
+    updatedBy: "",
   };
 }
 
@@ -68,5 +100,6 @@ export function createEquipmentFormFromRow(row) {
     engineer: row.engineer || "",
     contactEmail: row.contactEmail || "",
     notes: row.notes || "",
+    updatedBy: row.updatedBy || row.engineer || "",
   };
 }

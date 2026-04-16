@@ -72,6 +72,9 @@ export function normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate)
       const reminderDates = row["Reminder Dates"] || row.reminderDates || "";
       const lastPmDate = row["Last PM Date"] || row.lastPmDate || "";
       const completionDate = row["Completion Date"] || row.completionDate || "";
+      const createdDate = row["Created Date"] || row.createdDate || getTodayIsoDate();
+      const updatedDate = row["Updated Date"] || row.updatedDate || createdDate;
+      const updatedBy = row["Updated By"] || row.updatedBy || row.engineer || "System";
 
       if (!hospital && !equipment && !serial) return null;
 
@@ -98,6 +101,10 @@ export function normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate)
           row["Engineer Alert Sent"] || row.engineerAlertSent,
           row["Engineer Alert Sent"]
         ),
+        createdDate,
+        updatedDate,
+        updatedBy,
+        pmHistory: [],
       };
     })
     .filter(Boolean);
@@ -124,6 +131,9 @@ export function exportRowsToCsv(rows, getIntervalMonths) {
     "Reminder 1 Sent",
     "Reminder 2 Sent",
     "Engineer Alert Sent",
+    "Created Date",
+    "Updated Date",
+    "Updated By",
   ];
 
   const csv = [headers.join(",")]
@@ -149,6 +159,9 @@ export function exportRowsToCsv(rows, getIntervalMonths) {
           row.reminder1Sent ? "Yes" : "No",
           row.reminder2Sent ? "Yes" : "No",
           row.engineerAlertSent ? "Yes" : "No",
+          row.createdDate,
+          row.updatedDate,
+          row.updatedBy,
         ]
           .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
           .join(",")
