@@ -64,6 +64,31 @@ body {
   background: #e2e8f0;
 }
 
+.button-primary {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+
+.button-primary:hover {
+  background: #1e293b;
+}
+
+.danger {
+  border-color: #fecaca;
+  color: #991b1b;
+  background: #fff1f2;
+}
+
+.danger:hover {
+  background: #ffe4e6;
+}
+
+.inline-icon {
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -89,6 +114,33 @@ body {
 
 .filters-card {
   margin-bottom: 24px;
+}
+
+.form-card {
+  margin-bottom: 24px;
+}
+
+.form-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.equipment-form {
+  display: grid;
+  gap: 12px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.textarea {
+  min-height: 72px;
+  resize: vertical;
 }
 
 .filters-grid {
@@ -196,6 +248,10 @@ body {
   flex-wrap: wrap;
 }
 
+.action-note {
+  margin-top: 4px;
+}
+
 .side-grid {
   display: grid;
   gap: 16px;
@@ -257,6 +313,23 @@ body {
 
 .hidden-input {
   display: none;
+}
+
+@media (max-width: 960px) {
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .filters-grid,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 900px) {

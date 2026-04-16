@@ -6,7 +6,10 @@ import {
   Building2,
   CheckCircle2,
   ClipboardList,
+  Pencil,
+  Plus,
   Search,
+  Trash2,
   Wrench,
 } from "lucide-react";
 
@@ -20,6 +23,11 @@ const initialData = [
     serial: "MLH-PM-001",
     pmsPerYear: 2,
     nextPmDate: "2026-05-10",
+    department: "ICU",
+    notes: "Coordinate with ICU nurse in charge before PM.",
+    reminderDates: "2026-04-25, 2026-05-03",
+    lastPmDate: "2025-11-10",
+    completionDate: "",
     status: "Upcoming",
     engineer: "Ahmad",
     contactEmail: "biomed@mlh.example.com",
@@ -36,6 +44,11 @@ const initialData = [
     serial: "RIZK-AN-014",
     pmsPerYear: 4,
     nextPmDate: "2026-04-11",
+    department: "OR",
+    notes: "Unit used heavily on weekdays.",
+    reminderDates: "2026-03-27, 2026-04-04",
+    lastPmDate: "2026-01-11",
+    completionDate: "",
     status: "Overdue",
     engineer: "Nadim",
     contactEmail: "maintenance@rizk.example.com",
@@ -52,6 +65,11 @@ const initialData = [
     serial: "CMC-INF-109",
     pmsPerYear: 4,
     nextPmDate: "2026-04-20",
+    department: "Oncology",
+    notes: "Verify battery calibration log.",
+    reminderDates: "2026-04-05, 2026-04-13",
+    lastPmDate: "2026-01-20",
+    completionDate: "",
     status: "Confirmed",
     engineer: "Maya",
     contactEmail: "biomed@cmc.example.com",
@@ -68,6 +86,11 @@ const initialData = [
     serial: "HAM-DEF-021",
     pmsPerYear: 2,
     nextPmDate: "2026-04-16",
+    department: "ER",
+    notes: "Keep backup pads ready during maintenance.",
+    reminderDates: "2026-04-02, 2026-04-10",
+    lastPmDate: "2025-10-16",
+    completionDate: "",
     status: "Upcoming",
     engineer: "Karim",
     contactEmail: "biomed@hammoud.example.com",
@@ -153,6 +176,11 @@ function normalizeImportedRows(rawRows) {
       const status = row.Status || row.status || "Upcoming";
       const engineer = row["Engineer Assigned"] || row.engineer || "";
       const contactEmail = row["Hospital Contact Email"] || row.contactEmail || "";
+      const department = row.Department || row.department || "";
+      const notes = row.Notes || row.notes || "";
+      const reminderDates = row["Reminder Dates"] || row.reminderDates || "";
+      const lastPmDate = row["Last PM Date"] || row.lastPmDate || "";
+      const completionDate = row["Completion Date"] || row.completionDate || "";
 
       if (!hospital && !equipment && !serial) return null;
 
@@ -165,6 +193,11 @@ function normalizeImportedRows(rawRows) {
         serial,
         pmsPerYear,
         nextPmDate,
+        department,
+        notes,
+        reminderDates,
+        lastPmDate,
+        completionDate,
         status,
         engineer,
         contactEmail,
@@ -184,14 +217,43 @@ function normalizeImportedRows(rawRows) {
 }
 
 export default function App() {
+  const defaultEquipmentForm = {
+    hospital: "",
+    contractNo: "",
+    equipment: "",
+    model: "",
+    serial: "",
+    department: "",
+    pmsPerYear: 1,
+    nextPmDate: "",
+    lastPmDate: "",
+    completionDate: "",
+    reminderDates: "",
+    status: "Upcoming",
+    engineer: "",
+    contactEmail: "",
+    notes: "",
+  };
+
   const [rows, setRows] = useState(() => {
     const saved = localStorage.getItem("pm-tracker-rows");
-    return saved ? JSON.parse(saved) : initialData;
+    const parsed = saved ? JSON.parse(saved) : initialData;
+    return parsed.map((row) => ({
+      ...row,
+      department: row.department || "",
+      notes: row.notes || "",
+      reminderDates: row.reminderDates || "",
+      lastPmDate: row.lastPmDate || "",
+      completionDate: row.completionDate || "",
+    }));
   });
 
   const [search, setSearch] = useState("");
   const [hospitalFilter, setHospitalFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [equipmentForm, setEquipmentForm] = useState(defaultEquipmentForm);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -211,6 +273,11 @@ export default function App() {
         row.equipment,
         row.model,
         row.serial,
+        row.department,
+        row.notes,
+        row.reminderDates,
+        row.lastPmDate,
+        row.completionDate,
         row.engineer,
       ]
         .join(" ")
@@ -289,6 +356,11 @@ export default function App() {
       "Serial Number",
       "PMs per Year",
       "Next PM Date",
+      "Department",
+      "Notes",
+      "Reminder Dates",
+      "Last PM Date",
+      "Completion Date",
       "Status",
       "Engineer Assigned",
       "Hospital Contact Email",
@@ -308,6 +380,11 @@ export default function App() {
             row.serial,
             row.pmsPerYear,
             row.nextPmDate,
+            row.department,
+            row.notes,
+            row.reminderDates,
+            row.lastPmDate,
+            row.completionDate,
             row.status,
             row.engineer,
             row.contactEmail,
@@ -348,6 +425,63 @@ export default function App() {
     );
   }
 
+  function handleFormChange(field, value) {
+    setEquipmentForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function resetForm() {
+    setEquipmentForm(defaultEquipmentForm);
+    setEditingId(null);
+    setShowForm(false);
+  }
+
+  function startAdd() {
+    setEquipmentForm(defaultEquipmentForm);
+    setEditingId(null);
+    setShowForm(true);
+  }
+
+  function startEdit(row) {
+    setEquipmentForm({
+      hospital: row.hospital || "",
+      contractNo: row.contractNo || "",
+      equipment: row.equipment || "",
+      model: row.model || "",
+      serial: row.serial || "",
+      department: row.department || "",
+      pmsPerYear: row.pmsPerYear || 1,
+      nextPmDate: row.nextPmDate || "",
+      lastPmDate: row.lastPmDate || "",
+      completionDate: row.completionDate || "",
+      reminderDates: row.reminderDates || "",
+      status: row.status || "Upcoming",
+      engineer: row.engineer || "",
+      contactEmail: row.contactEmail || "",
+      notes: row.notes || "",
+    });
+    setEditingId(row.id);
+    setShowForm(true);
+  }
+
+  function handleDelete(id) {
+    setRows((current) => current.filter((row) => row.id !== id));
+  }
+
+  function handleSubmitEquipment(event) {
+    event.preventDefault();
+    const payload = {
+      ...equipmentForm,
+      pmsPerYear: Number(equipmentForm.pmsPerYear) || 1,
+    };
+
+    if (editingId) {
+      updateRow(editingId, payload);
+    } else {
+      setRows((current) => [{ id: Date.now(), ...payload }, ...current]);
+    }
+    resetForm();
+  }
+
   function badgeClass(status, overdueStatus) {
     if (status === "Completed") return "badge badge-completed";
     if (overdueStatus === "Overdue") return "badge badge-overdue";
@@ -383,8 +517,132 @@ export default function App() {
             <button className="button" onClick={exportJson}>
               Export JSON
             </button>
+            <button className="button button-primary" onClick={startAdd}>
+              <Plus size={16} className="inline-icon" />
+              Add Equipment
+            </button>
           </div>
         </div>
+
+        {showForm ? (
+          <div className="card form-card">
+            <div className="form-head">
+              <h2 className="section-title">
+                {editingId ? "Edit Equipment" : "Add Equipment"}
+              </h2>
+              <button className="button" onClick={resetForm}>
+                Cancel
+              </button>
+            </div>
+            <form className="equipment-form" onSubmit={handleSubmitEquipment}>
+              <div className="form-grid">
+                <input
+                  required
+                  className="input"
+                  placeholder="Hospital"
+                  value={equipmentForm.hospital}
+                  onChange={(e) => handleFormChange("hospital", e.target.value)}
+                />
+                <input
+                  className="input"
+                  placeholder="Contract No."
+                  value={equipmentForm.contractNo}
+                  onChange={(e) => handleFormChange("contractNo", e.target.value)}
+                />
+                <input
+                  required
+                  className="input"
+                  placeholder="Equipment"
+                  value={equipmentForm.equipment}
+                  onChange={(e) => handleFormChange("equipment", e.target.value)}
+                />
+                <input
+                  className="input"
+                  placeholder="Model"
+                  value={equipmentForm.model}
+                  onChange={(e) => handleFormChange("model", e.target.value)}
+                />
+                <input
+                  className="input"
+                  placeholder="Serial"
+                  value={equipmentForm.serial}
+                  onChange={(e) => handleFormChange("serial", e.target.value)}
+                />
+                <input
+                  className="input"
+                  placeholder="Department"
+                  value={equipmentForm.department}
+                  onChange={(e) => handleFormChange("department", e.target.value)}
+                />
+                <input
+                  className="input"
+                  type="number"
+                  min="1"
+                  placeholder="PMs per Year"
+                  value={equipmentForm.pmsPerYear}
+                  onChange={(e) => handleFormChange("pmsPerYear", e.target.value)}
+                />
+                <input
+                  className="input"
+                  type="date"
+                  value={equipmentForm.nextPmDate}
+                  onChange={(e) => handleFormChange("nextPmDate", e.target.value)}
+                />
+                <input
+                  className="input"
+                  type="date"
+                  value={equipmentForm.lastPmDate}
+                  onChange={(e) => handleFormChange("lastPmDate", e.target.value)}
+                />
+                <input
+                  className="input"
+                  type="date"
+                  value={equipmentForm.completionDate}
+                  onChange={(e) => handleFormChange("completionDate", e.target.value)}
+                />
+                <input
+                  className="input"
+                  placeholder="Reminder dates (comma-separated)"
+                  value={equipmentForm.reminderDates}
+                  onChange={(e) => handleFormChange("reminderDates", e.target.value)}
+                />
+                <select
+                  className="select"
+                  value={equipmentForm.status}
+                  onChange={(e) => handleFormChange("status", e.target.value)}
+                >
+                  {statuses.filter((status) => status !== "All").map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="input"
+                  placeholder="Engineer"
+                  value={equipmentForm.engineer}
+                  onChange={(e) => handleFormChange("engineer", e.target.value)}
+                />
+                <input
+                  className="input"
+                  type="email"
+                  placeholder="Hospital Contact Email"
+                  value={equipmentForm.contactEmail}
+                  onChange={(e) => handleFormChange("contactEmail", e.target.value)}
+                />
+              </div>
+              <textarea
+                className="input textarea"
+                placeholder="Notes"
+                value={equipmentForm.notes}
+                onChange={(e) => handleFormChange("notes", e.target.value)}
+              />
+              <button className="button button-primary" type="submit">
+                {editingId ? "Save Changes" : "Add Equipment"}
+              </button>
+            </form>
+          </div>
+        ) : null}
 
         <div className="metrics-grid">
           <div className="card">
@@ -476,7 +734,10 @@ export default function App() {
                     <th>Hospital</th>
                     <th>Equipment</th>
                     <th>Model</th>
+                    <th>Department</th>
                     <th>Next PM</th>
+                    <th>Last PM</th>
+                    <th>Completion</th>
                     <th>Engineer</th>
                     <th>Status</th>
                     <th>Actions</th>
@@ -493,10 +754,13 @@ export default function App() {
                           <div className="muted">{row.serial}</div>
                         </td>
                         <td>{row.model}</td>
+                        <td>{row.department || "—"}</td>
                         <td>
                           <div>{row.nextPmDate}</div>
                           <div className="muted">{getDaysUntil(row.nextPmDate)} days</div>
                         </td>
+                        <td>{row.lastPmDate || "—"}</td>
+                        <td>{row.completionDate || "—"}</td>
                         <td>{row.engineer}</td>
                         <td>
                           <span className={badgeClass(row.status, overdueStatus)}>
@@ -539,7 +803,23 @@ export default function App() {
                             >
                               Complete
                             </button>
+                            <button className="button" onClick={() => startEdit(row)}>
+                              <Pencil size={14} className="inline-icon" />
+                              Edit
+                            </button>
+                            <button className="button danger" onClick={() => handleDelete(row.id)}>
+                              <Trash2 size={14} className="inline-icon" />
+                              Delete
+                            </button>
                           </div>
+                          {row.reminderDates ? (
+                            <div className="muted action-note">
+                              Reminder dates: {row.reminderDates}
+                            </div>
+                          ) : null}
+                          {row.notes ? (
+                            <div className="muted action-note">Notes: {row.notes}</div>
+                          ) : null}
                         </td>
                       </tr>
                     );
