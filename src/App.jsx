@@ -123,6 +123,15 @@ function getOverdueStatus(dateStr, status) {
   return getDaysUntil(dateStr) < 0 ? "Overdue" : "On Track";
 }
 
+function isDueThisMonth(dateStr) {
+  const target = new Date(dateStr);
+  const today = new Date();
+  return (
+    target.getFullYear() === today.getFullYear() &&
+    target.getMonth() === today.getMonth()
+  );
+}
+
 function parseCsvLine(line) {
   const values = [];
   let current = "";
@@ -251,6 +260,8 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [hospitalFilter, setHospitalFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [timingFilter, setTimingFilter] = useState("All");
+  const [sortBy, setSortBy] = useState("None");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [equipmentForm, setEquipmentForm] = useState(defaultEquipmentForm);
@@ -266,7 +277,7 @@ export default function App() {
   }, [rows]);
 
   const filteredRows = useMemo(() => {
-    return rows.filter((row) => {
+    const filtered = rows.filter((row) => {
       const matchesSearch = [
         row.hospital,
         row.contractNo,
@@ -287,9 +298,41 @@ export default function App() {
       const matchesHospital = hospitalFilter === "All" || row.hospital === hospitalFilter;
       const matchesStatus = statusFilter === "All" || row.status === statusFilter;
 
-      return matchesSearch && matchesHospital && matchesStatus;
+      const daysUntil = getDaysUntil(row.nextPmDate);
+      const overdueStatus = getOverdueStatus(row.nextPmDate, row.status);
+      const matchesTiming =
+        timingFilter === "All" ||
+        (timingFilter === "Overdue only" && overdueStatus === "Overdue") ||
+        (timingFilter === "Due this week" && daysUntil >= 0 && daysUntil <= 7 && row.status !== "Completed") ||
+        (timingFilter === "Due this month" && isDueThisMonth(row.nextPmDate) && row.status !== "Completed") ||
+        (timingFilter === "Completed" && row.status === "Completed");
+
+      return matchesSearch && matchesHospital && matchesStatus && matchesTiming;
     });
-  }, [rows, search, hospitalFilter, statusFilter]);
+
+    return filtered.sort((a, b) => {
+      if (sortBy === "Hospital") {
+        return a.hospital.localeCompare(b.hospital);
+      }
+
+      if (sortBy === "Next PM date") {
+        return new Date(a.nextPmDate) - new Date(b.nextPmDate);
+      }
+
+      if (sortBy === "Overdue") {
+        const aOverdue = getOverdueStatus(a.nextPmDate, a.status) === "Overdue" ? 0 : 1;
+        const bOverdue = getOverdueStatus(b.nextPmDate, b.status) === "Overdue" ? 0 : 1;
+        if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+        return getDaysUntil(a.nextPmDate) - getDaysUntil(b.nextPmDate);
+      }
+
+      if (sortBy === "Engineer") {
+        return (a.engineer || "").localeCompare(b.engineer || "");
+      }
+
+      return 0;
+    });
+  }, [rows, search, hospitalFilter, statusFilter, timingFilter, sortBy]);
 
   const metrics = useMemo(() => {
     const total = rows.length;
@@ -718,6 +761,28 @@ export default function App() {
               {statuses.map((status) => (
                 <option key={status} value={status}>
                   {status}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={timingFilter}
+              onChange={(e) => setTimingFilter(e.target.value)}
+              className="select"
+            >
+              {["All", "Overdue only", "Due this week", "Due this month", "Completed"].map(
+                (filterOption) => (
+                  <option key={filterOption} value={filterOption}>
+                    {filterOption}
+                  </option>
+                )
+              )}
+            </select>
+
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="select">
+              {["None", "Hospital", "Next PM date", "Overdue", "Engineer"].map((option) => (
+                <option key={option} value={option}>
+                  Sort: {option}
                 </option>
               ))}
             </select>
