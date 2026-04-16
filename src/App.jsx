@@ -136,6 +136,7 @@ export default function App() {
   const [detailRow, setDetailRow] = useState(null);
   const [selectedHospitalDetail, setSelectedHospitalDetail] = useState(null);
   const [currentPage, setCurrentPage] = useState("dashboard");
+  const [bulkEquipmentText, setBulkEquipmentText] = useState("");
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -295,24 +296,39 @@ export default function App() {
 
   function resetForm() {
     setEquipmentForm(createDefaultEquipmentForm());
+    setBulkEquipmentText("");
     setEditingId(null);
     setShowForm(false);
   }
 
   function startAdd() {
     setEquipmentForm(createDefaultEquipmentForm());
+    setBulkEquipmentText("");
     setEditingId(null);
     setShowForm(true);
   }
 
   function startEdit(row) {
     setEquipmentForm(createEquipmentFormFromRow(row));
+    setBulkEquipmentText("");
     setEditingId(row.id);
     setShowForm(true);
   }
 
   function handleDelete(id) {
     setRows((current) => current.filter((row) => row.id !== id));
+  }
+
+  function parseBulkEquipmentLines(text) {
+    return text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [equipment, model, serial, department] = line.split("|").map((part) => (part || "").trim());
+        return { equipment, model, serial, department };
+      })
+      .filter((item) => item.equipment);
   }
 
   function markComplete(row) {
@@ -363,6 +379,9 @@ export default function App() {
           : equipmentForm.lastPmDate,
     };
 
+    const bulkItems = !editingId ? parseBulkEquipmentLines(bulkEquipmentText) : [];
+    const isBulkAdd = bulkItems.length > 0;
+
     if (editingId) {
       const existingRow = rows.find((row) => row.id === editingId);
       const completionChanged =
@@ -390,31 +409,60 @@ export default function App() {
       );
     } else {
       setRows((current) => [
-        {
-          id: Date.now(),
-          reminder1Sent: false,
-          reminder2Sent: false,
-          engineerAlertSent: false,
-          createdDate: today,
-          updatedDate: today,
-          updatedBy: actor,
-          pmHistory:
-            payload.status === "Completed" && payload.completionDate
-              ? [
-                  {
-                    date: payload.completionDate,
-                    status: "Completed",
-                    updatedBy: actor,
-                    notes: "Initial completed entry",
-                  },
-                ]
-              : [],
-          ...payload,
-        },
+        ...(isBulkAdd
+          ? bulkItems.map((item, index) => ({
+              id: Date.now() + index,
+              reminder1Sent: false,
+              reminder2Sent: false,
+              engineerAlertSent: false,
+              createdDate: today,
+              updatedDate: today,
+              updatedBy: actor,
+              pmHistory:
+                payload.status === "Completed" && payload.completionDate
+                  ? [
+                      {
+                        date: payload.completionDate,
+                        status: "Completed",
+                        updatedBy: actor,
+                        notes: "Initial completed entry",
+                      },
+                    ]
+                  : [],
+              ...payload,
+              equipment: item.equipment,
+              model: item.model || payload.model,
+              serial: item.serial || payload.serial,
+              department: item.department || payload.department,
+            }))
+          : [
+              {
+                id: Date.now(),
+                reminder1Sent: false,
+                reminder2Sent: false,
+                engineerAlertSent: false,
+                createdDate: today,
+                updatedDate: today,
+                updatedBy: actor,
+                pmHistory:
+                  payload.status === "Completed" && payload.completionDate
+                    ? [
+                        {
+                          date: payload.completionDate,
+                          status: "Completed",
+                          updatedBy: actor,
+                          notes: "Initial completed entry",
+                        },
+                      ]
+                    : [],
+                ...payload,
+              },
+            ]),
         ...current,
       ]);
     }
 
+    setBulkEquipmentText("");
     resetForm();
   }
 
@@ -457,7 +505,7 @@ export default function App() {
               <div className="form-grid">
                 <input required className="input" placeholder="Hospital" value={equipmentForm.hospital} onChange={(e) => handleFormChange("hospital", e.target.value)} />
                 <input className="input" placeholder="Contract No." value={equipmentForm.contractNo} onChange={(e) => handleFormChange("contractNo", e.target.value)} />
-                <input required className="input" placeholder="Equipment" value={equipmentForm.equipment} onChange={(e) => handleFormChange("equipment", e.target.value)} />
+                <input required={!bulkEquipmentText.trim()} className="input" placeholder="Equipment" value={equipmentForm.equipment} onChange={(e) => handleFormChange("equipment", e.target.value)} />
                 <input className="input" placeholder="Model" value={equipmentForm.model} onChange={(e) => handleFormChange("model", e.target.value)} />
                 <input className="input" placeholder="Serial" value={equipmentForm.serial} onChange={(e) => handleFormChange("serial", e.target.value)} />
                 <input className="input" placeholder="Department" value={equipmentForm.department} onChange={(e) => handleFormChange("department", e.target.value)} />
@@ -477,9 +525,21 @@ export default function App() {
                 <input className="input" type="email" placeholder="Hospital Contact Email" value={equipmentForm.contactEmail} onChange={(e) => handleFormChange("contactEmail", e.target.value)} />
                 <input className="input" placeholder="Updated by" value={equipmentForm.updatedBy} onChange={(e) => handleFormChange("updatedBy", e.target.value)} />
               </div>
+              {!editingId ? (
+                <div className="bulk-add-wrap">
+                  <div className="strong">Bulk equipment add (same hospital + contract)</div>
+                  <div className="muted">One line per item. Format: Equipment | Model | Serial | Department</div>
+                  <textarea
+                    className="input textarea"
+                    placeholder={"Ventilator | Servo-U | ICU-009 | ICU\nSuction Pump | New Askir | ICU-011 | ICU"}
+                    value={bulkEquipmentText}
+                    onChange={(e) => setBulkEquipmentText(e.target.value)}
+                  />
+                </div>
+              ) : null}
               <textarea className="input textarea" placeholder="Notes" value={equipmentForm.notes} onChange={(e) => handleFormChange("notes", e.target.value)} />
               <button className="button button-primary" type="submit">
-                {editingId ? "Save Changes" : "Add Equipment"}
+                {editingId ? "Save Changes" : bulkEquipmentText.trim() ? "Add Equipment in Bulk" : "Add Equipment"}
               </button>
             </form>
           </div>
