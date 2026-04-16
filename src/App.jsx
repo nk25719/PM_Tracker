@@ -9,6 +9,7 @@ import HospitalSummary from "./components/HospitalSummary";
 import ImportExportBar from "./components/ImportExportBar";
 import EquipmentDetailModal from "./components/EquipmentDetailModal";
 import HospitalDetailView from "./components/HospitalDetailView";
+import ContractTrackerView from "./components/ContractTrackerView";
 import {
   addMonths,
   getIntervalMonths,
@@ -47,6 +48,8 @@ const initialData = [
     reminderDates: "2026-04-25, 2026-05-03",
     lastPmDate: "2025-11-10",
     completionDate: "",
+    contractStartDate: "2026-01-01",
+    contractEndDate: "2026-12-31",
     status: "Upcoming",
     engineer: "Ahmad",
     contactEmail: "biomed@mlh.example.com",
@@ -68,6 +71,8 @@ const initialData = [
     reminderDates: "2026-03-27, 2026-04-04",
     lastPmDate: "2026-01-11",
     completionDate: "",
+    contractStartDate: "2026-02-01",
+    contractEndDate: "2027-01-31",
     status: "Hospital notified",
     engineer: "Nadim",
     contactEmail: "maintenance@rizk.example.com",
@@ -89,6 +94,8 @@ const initialData = [
     reminderDates: "2026-04-05, 2026-04-13",
     lastPmDate: "2026-01-20",
     completionDate: "",
+    contractStartDate: "2025-09-01",
+    contractEndDate: "2026-08-31",
     status: "Confirmed",
     engineer: "Maya",
     contactEmail: "biomed@cmc.example.com",
@@ -110,6 +117,8 @@ const initialData = [
     reminderDates: "2026-04-02, 2026-04-10",
     lastPmDate: "2025-10-16",
     completionDate: "",
+    contractStartDate: "2025-07-15",
+    contractEndDate: "2026-07-14",
     status: "Upcoming",
     engineer: "Karim",
     contactEmail: "biomed@hammoud.example.com",
@@ -136,7 +145,11 @@ export default function App() {
   const [detailRow, setDetailRow] = useState(null);
   const [selectedHospitalDetail, setSelectedHospitalDetail] = useState(null);
   const [currentPage, setCurrentPage] = useState("dashboard");
+  const [hospitalSummaryFilter, setHospitalSummaryFilter] = useState("All");
   const [bulkEquipmentText, setBulkEquipmentText] = useState("");
+  const [reminderWindow, setReminderWindow] = useState("next-week");
+  const [reminderScheduleAt, setReminderScheduleAt] = useState("");
+  const [quickActionFeedback, setQuickActionFeedback] = useState("");
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -253,6 +266,29 @@ export default function App() {
     [rows, selectedHospitalDetail]
   );
 
+  const contractRows = useMemo(() => {
+    const contractMap = new Map();
+    rows.forEach((row) => {
+      const key = `${row.hospital || ""}::${row.contractNo || ""}`;
+      if (!contractMap.has(key)) {
+        const endDate = row.contractEndDate || "";
+        const daysLeft = endDate ? getDaysUntil(endDate) : Number.POSITIVE_INFINITY;
+        contractMap.set(key, {
+          id: key,
+          hospital: row.hospital,
+          contractNo: row.contractNo,
+          contractStartDate: row.contractStartDate,
+          contractEndDate: endDate,
+          daysLeft,
+        });
+      }
+    });
+
+    return Array.from(contractMap.values())
+      .filter((item) => item.hospital || item.contractNo)
+      .sort((a, b) => a.daysLeft - b.daysLeft);
+  }, [rows]);
+
   function openHospitalDetail(hospital) {
     setSelectedHospitalDetail(hospital);
     setCurrentPage("hospital-detail");
@@ -261,6 +297,14 @@ export default function App() {
   function closeHospitalDetail() {
     setCurrentPage("dashboard");
     setSelectedHospitalDetail(null);
+  }
+
+  function openContractsView() {
+    setCurrentPage("contracts");
+  }
+
+  function closeContractsView() {
+    setCurrentPage("dashboard");
   }
 
   async function handleImportFile(event) {
@@ -475,6 +519,69 @@ export default function App() {
     return "badge badge-default";
   }
 
+  function handleUpcomingReminderAction() {
+    if (!reminderScheduleAt) {
+      setQuickActionFeedback("Please choose a definite reminder date and time first.");
+      return;
+    }
+
+    const windowDays = reminderWindow === "next-month" ? 30 : 7;
+    const eligibleRows = rows.filter((row) => {
+      const meta = getTrackingMeta(row);
+      return meta.daysUntil >= 0 && meta.daysUntil <= windowDays && meta.effectiveStatus !== "Completed";
+    });
+
+    if (!eligibleRows.length) {
+      setQuickActionFeedback("No upcoming PM items match your selected window.");
+      return;
+    }
+
+    const ids = new Set(eligibleRows.map((row) => row.id));
+    setRows((current) =>
+      current.map((row) =>
+        ids.has(row.id)
+          ? {
+              ...row,
+              reminder1Sent: true,
+              status: row.status === "Upcoming" ? "Hospital notified" : row.status,
+            }
+          : row
+      )
+    );
+
+    setQuickActionFeedback(
+      `Scheduled ${eligibleRows.length} reminder(s) for ${new Date(reminderScheduleAt).toLocaleString()} (${reminderWindow === "next-month" ? "next month" : "next week"}).`
+    );
+  }
+
+  function handleNotifyEngineersQuickAction(targetRows = rows) {
+    const actionableRows = targetRows.filter((row) => getTrackingMeta(row).effectiveStatus !== "Completed");
+    if (!actionableRows.length) {
+      setQuickActionFeedback("No pending PM items found to notify engineers.");
+      return;
+    }
+
+    const ids = new Set(actionableRows.map((row) => row.id));
+    setRows((current) =>
+      current.map((row) =>
+        ids.has(row.id)
+          ? {
+              ...row,
+              engineerAlertSent: true,
+              updatedBy: row.engineer || row.updatedBy || "System",
+            }
+          : row
+      )
+    );
+    setQuickActionFeedback(`Engineers notified for ${actionableRows.length} equipment item(s).`);
+  }
+
+  function showOverdueQuickAction() {
+    setTimingFilter("Overdue only");
+    setCurrentPage("dashboard");
+    setQuickActionFeedback("Showing overdue equipment in the main table.");
+  }
+
   return (
     <div className="app-shell">
       <div className="app-container">
@@ -513,6 +620,22 @@ export default function App() {
                 <input className="input" type="date" value={equipmentForm.nextPmDate} onChange={(e) => handleFormChange("nextPmDate", e.target.value)} />
                 <input className="input" type="date" value={equipmentForm.lastPmDate} onChange={(e) => handleFormChange("lastPmDate", e.target.value)} />
                 <input className="input" type="date" value={equipmentForm.completionDate} onChange={(e) => handleFormChange("completionDate", e.target.value)} />
+                <input
+                  className="input"
+                  type="date"
+                  aria-label="Contract start date"
+                  title="Contract start date"
+                  value={equipmentForm.contractStartDate}
+                  onChange={(e) => handleFormChange("contractStartDate", e.target.value)}
+                />
+                <input
+                  className="input"
+                  type="date"
+                  aria-label="Contract end date"
+                  title="Contract end date"
+                  value={equipmentForm.contractEndDate}
+                  onChange={(e) => handleFormChange("contractEndDate", e.target.value)}
+                />
                 <input className="input" placeholder="Reminder dates (comma-separated)" value={equipmentForm.reminderDates} onChange={(e) => handleFormChange("reminderDates", e.target.value)} />
                 <select className="select" value={equipmentForm.status} onChange={(e) => handleFormChange("status", e.target.value)}>
                   {editableStatuses.map((status) => (
@@ -546,8 +669,16 @@ export default function App() {
         ) : null}
 
         <DashboardCards metrics={metrics} />
+        <div className="view-toggle-row">
+          <button className={`button ${currentPage === "dashboard" ? "button-primary" : ""}`} onClick={() => setCurrentPage("dashboard")}>
+            Dashboard
+          </button>
+          <button className={`button ${currentPage === "contracts" ? "button-primary" : ""}`} onClick={openContractsView}>
+            Contracts View
+          </button>
+        </div>
 
-        {currentPage !== "hospital-detail" ? (
+        {currentPage === "dashboard" ? (
           <FiltersBar
             search={search}
             setSearch={setSearch}
@@ -570,7 +701,10 @@ export default function App() {
             rows={hospitalDetailRows}
             getTrackingMeta={getTrackingMeta}
             onBack={closeHospitalDetail}
+            onSendHospitalEmail={handleNotifyEngineersQuickAction}
           />
+        ) : currentPage === "contracts" ? (
+          <ContractTrackerView contracts={contractRows} onBack={closeContractsView} />
         ) : (
           <div className="main-grid">
             <EquipmentTable
@@ -588,22 +722,38 @@ export default function App() {
               <div className="card">
                 <h2 className="section-title">Quick Actions</h2>
                 <div className="side-actions">
-                  <button className="button">
+                  <div className="quick-action-block">
+                    <label className="muted">Reminder window</label>
+                    <select className="select" value={reminderWindow} onChange={(event) => setReminderWindow(event.target.value)}>
+                      <option value="next-week">Next week</option>
+                      <option value="next-month">Next month</option>
+                    </select>
+                    <label className="muted">Send at (date/time)</label>
+                    <input className="input" type="datetime-local" value={reminderScheduleAt} onChange={(event) => setReminderScheduleAt(event.target.value)} />
+                  </div>
+                  <button className="button" onClick={handleUpcomingReminderAction}>
                     <Bell size={16} className="inline-icon" />
                     Send Upcoming PM Reminders
                   </button>
-                  <button className="button">
+                  <button className="button" onClick={() => handleNotifyEngineersQuickAction()}>
                     <Wrench size={16} className="inline-icon" />
                     Notify Engineers
                   </button>
-                  <button className="button">
+                  <button className="button" onClick={showOverdueQuickAction}>
                     <AlertTriangle size={16} className="inline-icon" />
                     View Overdue Equipment
                   </button>
+                  {quickActionFeedback ? <div className="quick-action-feedback">{quickActionFeedback}</div> : null}
                 </div>
               </div>
 
-              <HospitalSummary byHospital={byHospital} selectedHospital={selectedHospitalDetail} onSelectHospital={openHospitalDetail} />
+              <HospitalSummary
+                byHospital={byHospital}
+                selectedHospital={selectedHospitalDetail}
+                onSelectHospital={openHospitalDetail}
+                hospitalSummaryFilter={hospitalSummaryFilter}
+                onHospitalSummaryFilterChange={setHospitalSummaryFilter}
+              />
             </div>
           </div>
         )}
