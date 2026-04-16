@@ -722,6 +722,18 @@ export default function App() {
     setQuickActionFeedback("Showing overdue equipment in the main table.");
   }
 
+  function handleMetricFilterSelect(nextTimingFilter) {
+    setTimingFilter(nextTimingFilter);
+    setCurrentPage("dashboard");
+    if (nextTimingFilter === "All") {
+      setQuickActionFeedback("Showing all equipment in the main table.");
+      return;
+    }
+    if (nextTimingFilter === "Due this week") {
+      setQuickActionFeedback("Showing equipment due this week in the main table.");
+    }
+  }
+
   return (
     <div className="app-shell">
       <div className="app-container">
@@ -739,7 +751,9 @@ export default function App() {
           />
         </div>
 
-        {currentPage !== "add-equipment" ? <DashboardCards metrics={metrics} /> : null}
+        {currentPage !== "add-equipment" ? (
+          <DashboardCards metrics={metrics} timingFilter={timingFilter} onMetricFilterSelect={handleMetricFilterSelect} />
+        ) : null}
         <div className="view-toggle-row">
           <button className={`button ${currentPage === "dashboard" ? "button-primary" : ""}`} onClick={() => setCurrentPage("dashboard")}>
             Dashboard
@@ -868,22 +882,16 @@ export default function App() {
             onExportContractsJson={exportContractsToJson}
           />
         ) : (
-          <div className="main-grid">
-            <EquipmentTable
-              rows={filteredRows}
-              getTrackingMeta={getTrackingMeta}
-              badgeClass={badgeClass}
-              updateRow={updateRow}
-              startEdit={startEdit}
-              handleDelete={handleDelete}
-              markComplete={markComplete}
-              onViewDetail={setDetailRow}
-            />
-
-            <div className="side-grid">
-              {renderHospitalSummaryPanel()}
-            </div>
-          </div>
+          <EquipmentTable
+            rows={filteredRows}
+            getTrackingMeta={getTrackingMeta}
+            badgeClass={badgeClass}
+            updateRow={updateRow}
+            startEdit={startEdit}
+            handleDelete={handleDelete}
+            markComplete={markComplete}
+            onViewDetail={setDetailRow}
+          />
         )}
       </div>
 
