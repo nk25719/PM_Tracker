@@ -49,7 +49,7 @@ const initialData = [
     reminderDates: "2026-03-27, 2026-04-04",
     lastPmDate: "2026-01-11",
     completionDate: "",
-    status: "Overdue",
+    status: "Hospital notified",
     engineer: "Nadim",
     contactEmail: "maintenance@rizk.example.com",
     reminder1Sent: true,
@@ -108,6 +108,7 @@ const statuses = [
   "In progress",
   "Completed",
   "Overdue",
+  "Deferred",
 ];
 
 function isValidDate(value) {
@@ -150,6 +151,38 @@ function isDueThisMonth(dateStr) {
     target.getFullYear() === today.getFullYear() &&
     target.getMonth() === today.getMonth()
   );
+}
+
+function getIntervalMonths(pmsPerYear) {
+  const count = Number(pmsPerYear) || 1;
+  return Number((12 / count).toFixed(2));
+}
+
+function getTrackingMeta(row) {
+  const status = row.status || "Upcoming";
+  const daysUntil = getDaysUntil(row.nextPmDate);
+  const isDoneState = status === "Completed" || status === "Deferred";
+  const isOverdue = !isDoneState && daysUntil < 0;
+  const dueSoon7 = !isDoneState && daysUntil >= 0 && daysUntil <= 7;
+  const dueSoon14 = !isDoneState && daysUntil >= 0 && daysUntil <= 14;
+
+  return {
+    daysUntil,
+    isOverdue,
+    dueSoon7,
+    dueSoon14,
+    intervalMonths: getIntervalMonths(row.pmsPerYear),
+    effectiveStatus: isOverdue ? "Overdue" : status,
+  };
+}
+
+function addMonths(dateStr, months) {
+  if (!dateStr) return "";
+  const base = new Date(dateStr);
+  if (Number.isNaN(base.getTime())) return "";
+  const out = new Date(base);
+  out.setMonth(out.getMonth() + months);
+  return out.toISOString().slice(0, 10);
 }
 
 function parseCsvLine(line) {
@@ -341,10 +374,12 @@ export default function App() {
         .includes(search.toLowerCase());
 
       const matchesHospital = hospitalFilter === "All" || row.hospital === hospitalFilter;
-      const matchesStatus = statusFilter === "All" || row.status === statusFilter;
+      const meta = getTrackingMeta(row);
+      const matchesStatus =
+        statusFilter === "All" ||
+        row.status === statusFilter ||
+        (statusFilter === "Overdue" && meta.isOverdue);
 
-      const daysUntil = getDaysUntil(row.nextPmDate);
-      const overdueStatus = getOverdueStatus(row.nextPmDate, row.status);
       const matchesTiming =
         timingFilter === "All" ||
         (timingFilter === "Overdue only" && overdueStatus === "Overdue") ||
@@ -373,8 +408,8 @@ export default function App() {
       }
 
       if (sortBy === "Overdue") {
-        const aOverdue = getOverdueStatus(a.nextPmDate, a.status) === "Overdue" ? 0 : 1;
-        const bOverdue = getOverdueStatus(b.nextPmDate, b.status) === "Overdue" ? 0 : 1;
+        const aOverdue = getTrackingMeta(a).isOverdue ? 0 : 1;
+        const bOverdue = getTrackingMeta(b).isOverdue ? 0 : 1;
         if (aOverdue !== bOverdue) return aOverdue - bOverdue;
         const aDays = getDaysUntil(a.nextPmDate);
         const bDays = getDaysUntil(b.nextPmDate);
@@ -406,14 +441,18 @@ export default function App() {
     const map = {};
     rows.forEach((row) => {
       if (!map[row.hospital]) {
-        map[row.hospital] = { total: 0, overdue: 0, upcoming: 0 };
+        map[row.hospital] = { total: 0, overdue: 0, upcoming: 0, dueSoon: 0 };
       }
+      const meta = getTrackingMeta(row);
       map[row.hospital].total += 1;
-      if (getOverdueStatus(row.nextPmDate, row.status) === "Overdue") {
+      if (meta.isOverdue) {
         map[row.hospital].overdue += 1;
       }
       if (row.status === "Upcoming") {
         map[row.hospital].upcoming += 1;
+      }
+      if (meta.dueSoon7) {
+        map[row.hospital].dueSoon += 1;
       }
     });
     return Object.entries(map).map(([hospital, values]) => ({
@@ -453,6 +492,7 @@ export default function App() {
       "Model",
       "Serial Number",
       "PMs per Year",
+      "Interval Months",
       "Next PM Date",
       "Department",
       "Notes",
@@ -477,6 +517,7 @@ export default function App() {
             row.model,
             row.serial,
             row.pmsPerYear,
+            getIntervalMonths(row.pmsPerYear),
             row.nextPmDate,
             row.department,
             row.notes,
@@ -580,9 +621,11 @@ export default function App() {
     resetForm();
   }
 
-  function badgeClass(status, overdueStatus) {
+  function badgeClass(status, meta) {
     if (status === "Completed") return "badge badge-completed";
-    if (overdueStatus === "Overdue") return "badge badge-overdue";
+    if (status === "Deferred") return "badge badge-deferred";
+    if (meta.isOverdue) return "badge badge-overdue";
+    if (meta.dueSoon7) return "badge badge-due-soon";
     if (status === "Confirmed") return "badge badge-confirmed";
     return "badge badge-default";
   }
@@ -709,7 +752,7 @@ export default function App() {
                   value={equipmentForm.status}
                   onChange={(e) => handleFormChange("status", e.target.value)}
                 >
-                  {statuses.filter((status) => status !== "All").map((status) => (
+                  {editableStatuses.map((status) => (
                     <option key={status} value={status}>
                       {status}
                     </option>
@@ -855,10 +898,13 @@ export default function App() {
                     <th>Equipment</th>
                     <th>Model</th>
                     <th>Department</th>
+                    <th>Frequency</th>
                     <th>Next PM</th>
                     <th>Last PM</th>
                     <th>Completion</th>
                     <th>Engineer</th>
+                    <th>Reminders</th>
+                    <th>Due-soon Flags</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -892,11 +938,23 @@ export default function App() {
                         <td>{row.lastPmDate || "—"}</td>
                         <td>{row.completionDate || "—"}</td>
                         <td>{row.engineer}</td>
+                        <td className="muted">
+                          <div>R1: {row.reminder1Sent ? "Sent" : "Pending"}</div>
+                          <div>R2: {row.reminder2Sent ? "Sent" : "Pending"}</div>
+                          <div>Alert: {row.engineerAlertSent ? "Sent" : "Pending"}</div>
+                        </td>
+                        <td className="muted">
+                          {meta.isOverdue
+                            ? "Overdue"
+                            : meta.dueSoon7
+                              ? "Due within 7 days"
+                              : meta.dueSoon14
+                                ? "Due within 14 days"
+                                : "Not due soon"}
+                        </td>
                         <td>
-                          <span className={badgeClass(row.status, overdueStatus)}>
-                            {overdueStatus === "Overdue" && row.status !== "Completed"
-                              ? "Overdue"
-                              : row.status}
+                          <span className={badgeClass(row.status, meta)}>
+                            {meta.effectiveStatus}
                           </span>
                         </td>
                         <td>
@@ -1003,6 +1061,10 @@ export default function App() {
                       <div className="stat-box">
                         <div className="stat-label">Upcoming</div>
                         <div className="stat-value">{item.upcoming}</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-label">Due in 7d</div>
+                        <div className="stat-value">{item.dueSoon}</div>
                       </div>
                       <div className="stat-box">
                         <div className="stat-label">Overdue</div>
