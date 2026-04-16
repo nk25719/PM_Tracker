@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
+import { loadRowsFromStorage, saveRowsToStorage } from "./storage";
 import {
   AlertTriangle,
   Bell,
@@ -263,6 +264,21 @@ function normalizeImportedRows(rawRows) {
     .filter(Boolean);
 }
 
+function normalizeRows(rows) {
+  return rows.map((row) => ({
+    ...row,
+    department: row.department || "",
+    notes: row.notes || "",
+    reminderDates: row.reminderDates || "",
+    lastPmDate: row.lastPmDate || "",
+    completionDate: row.completionDate || "",
+    reminder1Sent: Boolean(row.reminder1Sent),
+    reminder2Sent: Boolean(row.reminder2Sent),
+    engineerAlertSent: Boolean(row.engineerAlertSent),
+    status: normalizeStatus(row.status || "Upcoming"),
+  }));
+}
+
 export default function App() {
   const defaultEquipmentForm = {
     hospital: "",
@@ -282,22 +298,8 @@ export default function App() {
     notes: "",
   };
 
-  const [rows, setRows] = useState(() => {
-    const saved = localStorage.getItem("pm-tracker-rows");
-    const parsed = saved ? JSON.parse(saved) : initialData;
-    return parsed.map((row) => ({
-      ...row,
-      department: row.department || "",
-      notes: row.notes || "",
-      reminderDates: row.reminderDates || "",
-      lastPmDate: row.lastPmDate || "",
-      completionDate: row.completionDate || "",
-      reminder1Sent: Boolean(row.reminder1Sent),
-      reminder2Sent: Boolean(row.reminder2Sent),
-      engineerAlertSent: Boolean(row.engineerAlertSent),
-      status: normalizeStatus(row.status || "Upcoming"),
-    }));
-  });
+  const [rows, setRows] = useState(() => normalizeRows(initialData));
+  const [isStorageReady, setIsStorageReady] = useState(false);
 
   const [search, setSearch] = useState("");
   const [hospitalFilter, setHospitalFilter] = useState("All");
@@ -310,8 +312,37 @@ export default function App() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    localStorage.setItem("pm-tracker-rows", JSON.stringify(rows));
-  }, [rows]);
+    let isMounted = true;
+
+    async function restoreRows() {
+      try {
+        const storedRows = await loadRowsFromStorage();
+        if (isMounted && Array.isArray(storedRows)) {
+          setRows(normalizeRows(storedRows));
+        }
+      } catch (error) {
+        console.error("Failed to load data from IndexedDB", error);
+      } finally {
+        if (isMounted) {
+          setIsStorageReady(true);
+        }
+      }
+    }
+
+    restoreRows();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isStorageReady) return;
+
+    saveRowsToStorage(rows).catch((error) => {
+      console.error("Failed to save data to IndexedDB", error);
+    });
+  }, [rows, isStorageReady]);
 
   const hospitals = useMemo(() => {
     const unique = Array.from(new Set(rows.map((r) => r.hospital).filter(Boolean)));
