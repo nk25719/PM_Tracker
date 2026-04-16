@@ -110,7 +110,24 @@ const statuses = [
   "Overdue",
 ];
 
+function isValidDate(value) {
+  if (!value) return false;
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime());
+}
+
+function toSafeDateString(value) {
+  if (!isValidDate(value)) return "";
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function parsePositiveInt(value, fallback = 1) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
 function getDaysUntil(dateStr) {
+  if (!isValidDate(dateStr)) return null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const target = new Date(dateStr);
@@ -120,10 +137,13 @@ function getDaysUntil(dateStr) {
 
 function getOverdueStatus(dateStr, status) {
   if (status === "Completed") return "Completed";
-  return getDaysUntil(dateStr) < 0 ? "Overdue" : "On Track";
+  const daysUntil = getDaysUntil(dateStr);
+  if (daysUntil === null) return "On Track";
+  return daysUntil < 0 ? "Overdue" : "On Track";
 }
 
 function isDueThisMonth(dateStr) {
+  if (!isValidDate(dateStr)) return false;
   const target = new Date(dateStr);
   const today = new Date();
   return (
@@ -164,6 +184,26 @@ function parseCsvLine(line) {
   return values;
 }
 
+function nextUniqueId() {
+  return Date.now() + Math.floor(Math.random() * 1000000);
+}
+
+function normalizeRow(row) {
+  return {
+    ...row,
+    department: row.department || "",
+    notes: row.notes || "",
+    reminderDates: row.reminderDates || "",
+    lastPmDate: toSafeDateString(row.lastPmDate),
+    completionDate: toSafeDateString(row.completionDate),
+    nextPmDate: toSafeDateString(row.nextPmDate),
+    pmsPerYear: parsePositiveInt(row.pmsPerYear, 1),
+    reminder1Sent: Boolean(row.reminder1Sent),
+    reminder2Sent: Boolean(row.reminder2Sent),
+    engineerAlertSent: Boolean(row.engineerAlertSent),
+  };
+}
+
 function normalizeImportedRows(rawRows) {
   return rawRows
     .map((row, index) => {
@@ -179,22 +219,23 @@ function normalizeImportedRows(rawRows) {
         "";
       const model = row.Model || row.model || "";
       const serial = row["Serial Number"] || row.serial || row.Serial || "";
-      const pmsPerYear = Number(row["PMs per Year"] || row.pmsPerYear || 1) || 1;
+      const pmsPerYear = parsePositiveInt(row["PMs per Year"] || row.pmsPerYear, 1);
       const nextPmDate =
-        row["Next PM Date"] || row.nextPmDate || new Date().toISOString().slice(0, 10);
+        toSafeDateString(row["Next PM Date"] || row.nextPmDate) ||
+        new Date().toISOString().slice(0, 10);
       const status = row.Status || row.status || "Upcoming";
       const engineer = row["Engineer Assigned"] || row.engineer || "";
       const contactEmail = row["Hospital Contact Email"] || row.contactEmail || "";
       const department = row.Department || row.department || "";
       const notes = row.Notes || row.notes || "";
       const reminderDates = row["Reminder Dates"] || row.reminderDates || "";
-      const lastPmDate = row["Last PM Date"] || row.lastPmDate || "";
-      const completionDate = row["Completion Date"] || row.completionDate || "";
+      const lastPmDate = toSafeDateString(row["Last PM Date"] || row.lastPmDate);
+      const completionDate = toSafeDateString(row["Completion Date"] || row.completionDate);
 
       if (!hospital && !equipment && !serial) return null;
 
       return {
-        id: Date.now() + index,
+        id: nextUniqueId() + index,
         hospital,
         contractNo,
         equipment,
@@ -222,7 +263,22 @@ function normalizeImportedRows(rawRows) {
           String(row["Engineer Alert Sent"] || "").toLowerCase() === "yes",
       };
     })
-    .filter(Boolean);
+    .filter(Boolean)
+    .map(normalizeRow);
+}
+
+function loadRowsFromStorage() {
+  const saved = localStorage.getItem("pm-tracker-rows");
+  if (!saved) return initialData.map(normalizeRow);
+
+  try {
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed)) return initialData.map(normalizeRow);
+    return parsed.map(normalizeRow);
+  } catch (error) {
+    console.warn("Could not parse local PM tracker data. Falling back to defaults.", error);
+    return initialData.map(normalizeRow);
+  }
 }
 
 export default function App() {
@@ -244,18 +300,7 @@ export default function App() {
     notes: "",
   };
 
-  const [rows, setRows] = useState(() => {
-    const saved = localStorage.getItem("pm-tracker-rows");
-    const parsed = saved ? JSON.parse(saved) : initialData;
-    return parsed.map((row) => ({
-      ...row,
-      department: row.department || "",
-      notes: row.notes || "",
-      reminderDates: row.reminderDates || "",
-      lastPmDate: row.lastPmDate || "",
-      completionDate: row.completionDate || "",
-    }));
-  });
+  const [rows, setRows] = useState(() => loadRowsFromStorage());
 
   const [search, setSearch] = useState("");
   const [hospitalFilter, setHospitalFilter] = useState("All");
@@ -303,8 +348,14 @@ export default function App() {
       const matchesTiming =
         timingFilter === "All" ||
         (timingFilter === "Overdue only" && overdueStatus === "Overdue") ||
-        (timingFilter === "Due this week" && daysUntil >= 0 && daysUntil <= 7 && row.status !== "Completed") ||
-        (timingFilter === "Due this month" && isDueThisMonth(row.nextPmDate) && row.status !== "Completed") ||
+        (timingFilter === "Due this week" &&
+          daysUntil !== null &&
+          daysUntil >= 0 &&
+          daysUntil <= 7 &&
+          row.status !== "Completed") ||
+        (timingFilter === "Due this month" &&
+          isDueThisMonth(row.nextPmDate) &&
+          row.status !== "Completed") ||
         (timingFilter === "Completed" && row.status === "Completed");
 
       return matchesSearch && matchesHospital && matchesStatus && matchesTiming;
@@ -316,14 +367,18 @@ export default function App() {
       }
 
       if (sortBy === "Next PM date") {
-        return new Date(a.nextPmDate) - new Date(b.nextPmDate);
+        const first = isValidDate(a.nextPmDate) ? new Date(a.nextPmDate).getTime() : Number.MAX_SAFE_INTEGER;
+        const second = isValidDate(b.nextPmDate) ? new Date(b.nextPmDate).getTime() : Number.MAX_SAFE_INTEGER;
+        return first - second;
       }
 
       if (sortBy === "Overdue") {
         const aOverdue = getOverdueStatus(a.nextPmDate, a.status) === "Overdue" ? 0 : 1;
         const bOverdue = getOverdueStatus(b.nextPmDate, b.status) === "Overdue" ? 0 : 1;
         if (aOverdue !== bOverdue) return aOverdue - bOverdue;
-        return getDaysUntil(a.nextPmDate) - getDaysUntil(b.nextPmDate);
+        const aDays = getDaysUntil(a.nextPmDate);
+        const bDays = getDaysUntil(b.nextPmDate);
+        return (aDays ?? Number.MAX_SAFE_INTEGER) - (bDays ?? Number.MAX_SAFE_INTEGER);
       }
 
       if (sortBy === "Engineer") {
@@ -341,7 +396,7 @@ export default function App() {
     ).length;
     const dueSoon = rows.filter((r) => {
       const days = getDaysUntil(r.nextPmDate);
-      return days >= 0 && days <= 7 && r.status !== "Completed";
+      return days !== null && days >= 0 && days <= 7 && r.status !== "Completed";
     }).length;
     const completed = rows.filter((r) => r.status === "Completed").length;
     return { total, overdue, dueSoon, completed };
@@ -464,7 +519,7 @@ export default function App() {
 
   function updateRow(id, patch) {
     setRows((current) =>
-      current.map((row) => (row.id === id ? { ...row, ...patch } : row))
+      current.map((row) => (row.id === id ? normalizeRow({ ...row, ...patch }) : row))
     );
   }
 
@@ -512,15 +567,15 @@ export default function App() {
 
   function handleSubmitEquipment(event) {
     event.preventDefault();
-    const payload = {
+    const payload = normalizeRow({
       ...equipmentForm,
-      pmsPerYear: Number(equipmentForm.pmsPerYear) || 1,
-    };
+      pmsPerYear: parsePositiveInt(equipmentForm.pmsPerYear, 1),
+    });
 
     if (editingId) {
       updateRow(editingId, payload);
     } else {
-      setRows((current) => [{ id: Date.now(), ...payload }, ...current]);
+      setRows((current) => [{ id: nextUniqueId(), ...payload }, ...current]);
     }
     resetForm();
   }
@@ -809,8 +864,16 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
+                  {filteredRows.length === 0 ? (
+                    <tr>
+                      <td colSpan="10" className="muted empty-state">
+                        No equipment records match your filters.
+                      </td>
+                    </tr>
+                  ) : null}
                   {filteredRows.map((row) => {
                     const overdueStatus = getOverdueStatus(row.nextPmDate, row.status);
+                    const daysUntil = getDaysUntil(row.nextPmDate);
                     return (
                       <tr key={row.id}>
                         <td>{row.hospital}</td>
@@ -821,8 +884,10 @@ export default function App() {
                         <td>{row.model}</td>
                         <td>{row.department || "—"}</td>
                         <td>
-                          <div>{row.nextPmDate}</div>
-                          <div className="muted">{getDaysUntil(row.nextPmDate)} days</div>
+                          <div>{row.nextPmDate || "—"}</div>
+                          <div className="muted">
+                            {daysUntil === null ? "No date" : `${daysUntil} days`}
+                          </div>
                         </td>
                         <td>{row.lastPmDate || "—"}</td>
                         <td>{row.completionDate || "—"}</td>
@@ -864,7 +929,13 @@ export default function App() {
                             </button>
                             <button
                               className="button"
-                              onClick={() => updateRow(row.id, { status: "Completed" })}
+                              onClick={() =>
+                                updateRow(row.id, {
+                                  status: "Completed",
+                                  completionDate:
+                                    row.completionDate || new Date().toISOString().slice(0, 10),
+                                })
+                              }
                             >
                               Complete
                             </button>

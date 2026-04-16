@@ -338,3 +338,8 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.empty-state {
+  text-align: center;
+  padding: 20px;
+}
