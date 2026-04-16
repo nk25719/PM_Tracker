@@ -495,6 +495,7 @@ export default function App() {
           <HospitalDetailView
             hospital={selectedHospitalDetail}
             rows={hospitalDetailRows}
+            getTrackingMeta={getTrackingMeta}
             onClose={() => setSelectedHospitalDetail(null)}
           />
         ) : null}
