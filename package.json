@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test test/storage.test.mjs"
+    "test": "node --test test/storage.test.mjs",
+    "desktop:dev": "cargo tauri dev --manifest-path src-tauri/Cargo.toml",
+    "desktop:build": "cargo tauri build --manifest-path src-tauri/Cargo.toml"
   },
   "dependencies": {
     "lucide-react": "^1.8.0",

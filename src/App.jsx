@@ -22,7 +22,7 @@ import {
   exportRowsToCsv,
   exportRowsToJson,
   normalizeImportedRows,
-  parseCsvText,
+  parseImportFile,
 } from "./utils/csvUtils";
 import {
   createDefaultEquipmentForm,
@@ -299,10 +299,6 @@ export default function App() {
     setCurrentPage("contracts");
   }
 
-  function openHospitalStatusView() {
-    setCurrentPage("hospital-status");
-  }
-
   function closeContractsView() {
     setCurrentPage("dashboard");
   }
@@ -311,10 +307,16 @@ export default function App() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const text = await file.text();
-    const rawRows = parseCsvText(text);
-    const imported = normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate);
-    if (imported.length) setRows(normalizeRows(imported));
+    try {
+      const rawRows = await parseImportFile(file);
+      const imported = normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate);
+      if (imported.length) setRows(normalizeRows(imported));
+      else setQuickActionFeedback("No valid records found in imported file.");
+    } catch (error) {
+      console.error("Import failed", error);
+      setQuickActionFeedback(error.message || "Import failed. Please check file format.");
+    }
+
     event.target.value = "";
   }
 
@@ -322,8 +324,15 @@ export default function App() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const text = await file.text();
-    const importedRows = parseCsvText(text);
+    let importedRows = [];
+    try {
+      importedRows = await parseImportFile(file);
+    } catch (error) {
+      console.error("Contract import failed", error);
+      setQuickActionFeedback(error.message || "Contract import failed.");
+      event.target.value = "";
+      return;
+    }
 
     if (!importedRows.length) {
       event.target.value = "";
@@ -633,7 +642,7 @@ export default function App() {
     );
   }
 
-  function handleNotifyEngineersQuickAction(targetRows = rows) {
+  function handleNotifyEngineersQuickAction(targetRows = rows, reason = "Engineer notification") {
     const actionableRows = targetRows.filter((row) => getTrackingMeta(row).effectiveStatus !== "Completed");
     if (!actionableRows.length) {
       setQuickActionFeedback("No pending PM items found to notify engineers.");
@@ -652,7 +661,60 @@ export default function App() {
           : row
       )
     );
+    logHospitalEmailHistory(actionableRows, reason);
     setQuickActionFeedback(`Engineers notified for ${actionableRows.length} equipment item(s).`);
+  }
+
+
+
+  function addCommunicationEntry(rowIds, entryBuilder) {
+    const idSet = new Set(rowIds);
+    setRows((current) =>
+      current.map((row) => {
+        if (!idSet.has(row.id)) return row;
+        return entryBuilder(row);
+      })
+    );
+  }
+
+  function handleAddHospitalComment({ rowIds, note, by }) {
+    const at = new Date().toISOString();
+    addCommunicationEntry(rowIds, (row) => ({
+      ...row,
+      comments: [...(row.comments || []), { at, by, note }],
+      updatedBy: by || row.updatedBy,
+      updatedDate: getTodayIsoDate(),
+    }));
+    setQuickActionFeedback(`Comment added to ${rowIds.length} selected item(s).`);
+  }
+
+  function logHospitalEmailHistory(targetRows, subject = "PM follow-up email") {
+    const at = new Date().toISOString();
+    const rowIds = targetRows.map((row) => row.id);
+    addCommunicationEntry(rowIds, (row) => ({
+      ...row,
+      emailHistory: [
+        ...(row.emailHistory || []),
+        {
+          at,
+          by: row.engineer || row.updatedBy || "PM Coordinator",
+          subject,
+          note: `Email draft opened for ${row.contactEmail || "hospital contact"}`,
+        },
+      ],
+    }));
+  }
+
+  function renderHospitalSummaryPanel() {
+    return (
+      <HospitalSummary
+        byHospital={byHospital}
+        selectedHospital={selectedHospitalDetail}
+        onSelectHospital={openHospitalDetail}
+        hospitalSummaryFilter={hospitalSummaryFilter}
+        onHospitalSummaryFilterChange={setHospitalSummaryFilter}
+      />
+    );
   }
 
   function showOverdueQuickAction() {
@@ -667,7 +729,7 @@ export default function App() {
         <div className="topbar">
           <div>
             <h1 className="page-title">Preventive Maintenance Tracker</h1>
-            <p className="subtitle">Local PM dashboard with CSV import/export and reminder tracking.</p>
+            <p className="subtitle">User-friendly PM dashboard with CSV/Excel import, COM history, and reminder tracking.</p>
           </div>
 
           <ImportExportBar
@@ -752,7 +814,7 @@ export default function App() {
           <button className={`button ${currentPage === "dashboard" ? "button-primary" : ""}`} onClick={() => setCurrentPage("dashboard")}>
             Dashboard
           </button>
-          <button className={`button ${currentPage === "hospital-status" ? "button-primary" : ""}`} onClick={openHospitalStatusView}>
+          <button className={`button ${currentPage === "hospital-status" ? "button-primary" : ""}`} onClick={() => setCurrentPage("hospital-status")}>
             Hospital Equipment Status
           </button>
           <button className={`button ${currentPage === "contracts" ? "button-primary" : ""}`} onClick={openContractsView}>
@@ -784,6 +846,7 @@ export default function App() {
             getTrackingMeta={getTrackingMeta}
             onBack={() => setCurrentPage("hospital-status")}
             onSendHospitalEmail={handleNotifyEngineersQuickAction}
+            onAddHospitalComment={handleAddHospitalComment}
           />
         ) : currentPage === "hospital-status" ? (
           <div className="main-grid">
@@ -817,13 +880,7 @@ export default function App() {
               </div>
             </div>
 
-            <HospitalSummary
-              byHospital={byHospital}
-              selectedHospital={selectedHospitalDetail}
-              onSelectHospital={openHospitalDetail}
-              hospitalSummaryFilter={hospitalSummaryFilter}
-              onHospitalSummaryFilterChange={setHospitalSummaryFilter}
-            />
+            {renderHospitalSummaryPanel()}
           </div>
         ) : currentPage === "contracts" ? (
           <ContractTrackerView
@@ -848,13 +905,7 @@ export default function App() {
             />
 
             <div className="side-grid">
-              <HospitalSummary
-                byHospital={byHospital}
-                selectedHospital={selectedHospitalDetail}
-                onSelectHospital={openHospitalDetail}
-                hospitalSummaryFilter={hospitalSummaryFilter}
-                onHospitalSummaryFilterChange={setHospitalSummaryFilter}
-              />
+              {renderHospitalSummaryPanel()}
             </div>
           </div>
         )}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Building2, Copy, Mail } from "lucide-react";
+import { ArrowLeft, Building2, Copy, Mail, MessageSquare } from "lucide-react";
 
 function buildEmailDraft(pendingRows, hospital) {
   const subject = `Preventive Maintenance Follow-up - ${hospital} (${pendingRows.length} pending item${pendingRows.length === 1 ? "" : "s"})`;
@@ -29,9 +29,18 @@ function buildEmailDraft(pendingRows, hospital) {
   return { subject, body };
 }
 
-export default function HospitalDetailView({ hospital, rows, onBack, getTrackingMeta, onSendHospitalEmail }) {
+export default function HospitalDetailView({
+  hospital,
+  rows,
+  onBack,
+  getTrackingMeta,
+  onSendHospitalEmail,
+  onAddHospitalComment,
+}) {
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState([]);
   const [copied, setCopied] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [commentBy, setCommentBy] = useState("PM Coordinator");
 
   useEffect(() => {
     if (!rows.length) {
@@ -57,6 +66,32 @@ export default function HospitalDetailView({ hospital, rows, onBack, getTracking
   const selectedMailTo = canEmailSelected
     ? `mailto:${Array.from(new Set(rowsForEmail.map((row) => row.contactEmail).filter(Boolean))).join(",")}?subject=${encodeURIComponent(emailDraft.subject)}&body=${encodeURIComponent(emailDraft.body)}`
     : "";
+
+  const communicationTimeline = useMemo(() => {
+    const targetRows = selectedRows.length ? selectedRows : rows;
+    return targetRows
+      .flatMap((row) => [
+        ...(row.comments || []).map((item) => ({
+          ...item,
+          type: "comment",
+          equipment: row.equipment,
+          serial: row.serial,
+        })),
+        ...(row.emailHistory || []).map((item) => ({
+          ...item,
+          type: "email",
+          equipment: row.equipment,
+          serial: row.serial,
+        })),
+        ...(row.pmHistory || []).map((item) => ({
+          ...item,
+          type: "pm",
+          equipment: row.equipment,
+          serial: row.serial,
+        })),
+      ])
+      .sort((a, b) => new Date(b.at || b.date || 0) - new Date(a.at || a.date || 0));
+  }, [rows, selectedRows]);
 
   if (!hospital) return null;
 
@@ -89,7 +124,18 @@ export default function HospitalDetailView({ hospital, rows, onBack, getTracking
 
   function handleOpenEmailClient() {
     if (!canEmailSelected) return;
-    onSendHospitalEmail?.(rowsForEmail);
+    onSendHospitalEmail?.(rowsForEmail, emailDraft.subject);
+  }
+
+  function handleAddComment(event) {
+    event.preventDefault();
+    if (!commentText.trim()) return;
+    onAddHospitalComment?.({
+      rowIds: selectedRows.length ? selectedRows.map((row) => row.id) : rows.map((row) => row.id),
+      note: commentText.trim(),
+      by: commentBy.trim() || "PM Coordinator",
+    });
+    setCommentText("");
   }
 
   return (
@@ -153,6 +199,45 @@ export default function HospitalDetailView({ hospital, rows, onBack, getTracking
             "Select equipment or keep all selected by default to generate a draft email for pending preventive maintenance."
           }
         />
+      </div>
+
+      <form className="comment-form" onSubmit={handleAddComment}>
+        <div className="comment-form-head">
+          <div className="selection-meta">
+            <MessageSquare size={14} className="inline-icon" />
+            Communication notes
+          </div>
+          <input
+            className="input"
+            value={commentBy}
+            onChange={(event) => setCommentBy(event.target.value)}
+            placeholder="Added by"
+          />
+        </div>
+        <textarea
+          className="input textarea"
+          value={commentText}
+          onChange={(event) => setCommentText(event.target.value)}
+          placeholder="Add a comment or follow-up note. It will be stored in selected equipment COM history."
+        />
+        <button className="button" type="submit">Add comment to history</button>
+      </form>
+
+      <div className="com-history-wrap">
+        <h3 className="section-title hospital-subsection-title">COM History (comments, notes, emails)</h3>
+        {communicationTimeline.length ? (
+          <div className="history-list">
+            {communicationTimeline.slice(0, 40).map((entry, idx) => (
+              <div key={`${entry.type}-${entry.at || entry.date}-${idx}`} className="history-item">
+                <div className="strong">{entry.type.toUpperCase()} · {entry.equipment || "General"}</div>
+                <div className="muted">{entry.serial || "No serial"} · {entry.by || entry.updatedBy || "System"} · {entry.at || entry.date || "Unknown date"}</div>
+                <div>{entry.note || entry.notes || entry.subject || "No details"}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="muted">No communication history yet for this hospital.</div>
+        )}
       </div>
 
       <div className="hospital-status-view">
