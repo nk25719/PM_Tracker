@@ -1,10 +1,21 @@
 import React from "react";
 import { AlertTriangle, Bell, CheckCircle2, ClipboardList } from "lucide-react";
 
-export default function DashboardCards({ metrics }) {
+export default function DashboardCards({ metrics, timingFilter, onMetricFilterSelect }) {
+  function handleCardClick(nextTimingFilter) {
+    if (onMetricFilterSelect) onMetricFilterSelect(nextTimingFilter);
+  }
+
+  const totalIsActive = timingFilter === "All";
+  const dueThisWeekIsActive = timingFilter === "Due this week";
+
   return (
     <div className="metrics-grid">
-      <div className="card">
+      <button
+        type="button"
+        className={`card metric-card-button ${totalIsActive ? "metric-card-active" : ""}`}
+        onClick={() => handleCardClick("All")}
+      >
         <div className="metric-row">
           <div>
             <div className="metric-label">Total Equipment</div>
@@ -12,7 +23,7 @@ export default function DashboardCards({ metrics }) {
           </div>
           <ClipboardList />
         </div>
-      </div>
+      </button>
 
       <div className="card">
         <div className="metric-row">
@@ -24,7 +35,11 @@ export default function DashboardCards({ metrics }) {
         </div>
       </div>
 
-      <div className="card">
+      <button
+        type="button"
+        className={`card metric-card-button ${dueThisWeekIsActive ? "metric-card-active" : ""}`}
+        onClick={() => handleCardClick("Due this week")}
+      >
         <div className="metric-row">
           <div>
             <div className="metric-label">Due This Week</div>
@@ -32,7 +47,7 @@ export default function DashboardCards({ metrics }) {
           </div>
           <Bell />
         </div>
-      </div>
+      </button>
 
       <div className="card">
         <div className="metric-row">
