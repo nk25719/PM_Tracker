@@ -1,89 +1,109 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Building2, Mail } from "lucide-react";
+import { ArrowLeft, Building2, Mail } from "lucide-react";
 
-function buildMailTo(row, hospital) {
-  const subject = `PM Follow-up: ${row.equipment} (${row.serial || "No serial"})`;
+function buildMailToForSelection(selectedRows, hospital) {
+  const contactEmails = Array.from(new Set(selectedRows.map((row) => row.contactEmail).filter(Boolean)));
+  if (!contactEmails.length) return "";
+
+  const subject = `PM Follow-up (${selectedRows.length} item${selectedRows.length === 1 ? "" : "s"}) - ${hospital}`;
+  const equipmentLines = selectedRows.map(
+    (row, index) =>
+      `${index + 1}. ${row.equipment} | Model: ${row.model || "-"} | Serial: ${row.serial || "-"} | Dept: ${row.department || "-"} | Status: ${row.status || "Upcoming"} | Next PM: ${row.nextPmDate || "-"}`
+  );
+
   const body = [
     "Hello,",
     "",
-    `This is a quick follow-up for preventive maintenance at ${hospital}.`,
+    `This is a preventive maintenance follow-up for ${hospital}.`,
     "",
-    `Equipment: ${row.equipment}`,
-    `Model: ${row.model || "-"}`,
-    `Serial: ${row.serial || "-"}`,
-    `Department: ${row.department || "-"}`,
-    `Current Status: ${row.status || "Upcoming"}`,
-    `Next PM Date: ${row.nextPmDate || "-"}`,
+    "Selected equipment:",
+    ...equipmentLines,
     "",
     "Please confirm a suitable maintenance time slot.",
     "",
     "Regards,",
-    row.engineer || "PM Team",
+    "PM Team",
   ].join("\n");
 
-  return `mailto:${row.contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  return `mailto:${contactEmails.join(",")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
-export default function HospitalDetailView({ hospital, rows, onClose, getTrackingMeta }) {
-  const [selectedEquipmentId, setSelectedEquipmentId] = useState(null);
+export default function HospitalDetailView({ hospital, rows, onBack, getTrackingMeta }) {
+  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState([]);
 
   useEffect(() => {
     if (!rows.length) {
-      setSelectedEquipmentId(null);
+      setSelectedEquipmentIds([]);
       return;
     }
 
-    setSelectedEquipmentId((current) => {
-      if (current && rows.some((row) => String(row.id) === String(current))) return current;
-      return String(rows[0].id);
-    });
+    setSelectedEquipmentIds((current) => current.filter((id) => rows.some((row) => String(row.id) === String(id))));
   }, [rows]);
 
-  const selectedEquipment = useMemo(
-    () => rows.find((row) => String(row.id) === String(selectedEquipmentId)) || null,
-    [rows, selectedEquipmentId]
+  const selectedRows = useMemo(
+    () => rows.filter((row) => selectedEquipmentIds.includes(String(row.id))),
+    [rows, selectedEquipmentIds]
   );
+  const canEmailSelected = selectedRows.some((row) => row.contactEmail);
+  const selectedMailTo = canEmailSelected ? buildMailToForSelection(selectedRows, hospital) : "";
 
   if (!hospital) return null;
+
+  function toggleSelection(rowId) {
+    const asString = String(rowId);
+    setSelectedEquipmentIds((current) =>
+      current.includes(asString) ? current.filter((id) => id !== asString) : [...current, asString]
+    );
+  }
+
+  function selectAll() {
+    setSelectedEquipmentIds(rows.map((row) => String(row.id)));
+  }
+
+  function clearSelection() {
+    setSelectedEquipmentIds([]);
+  }
 
   return (
     <div className="card">
       <div className="detail-head">
         <div>
-          <h2 className="section-title">Hospital Detail</h2>
+          <h2 className="section-title">Hospital Equipment Status</h2>
           <div className="hospital-headline">
             <Building2 size={16} className="inline-icon" />
             {hospital}
           </div>
         </div>
-        <button className="button" onClick={onClose}>
-          Clear
+        <button className="button" onClick={onBack}>
+          <ArrowLeft size={15} className="inline-icon" />
+          Back to dashboard
         </button>
       </div>
 
-      <div className="hospital-quick-actions">
-        <select
-          className="select"
-          value={selectedEquipmentId ? String(selectedEquipmentId) : ""}
-          onChange={(event) => setSelectedEquipmentId(event.target.value)}
-          disabled={!rows.length}
-        >
-          {rows.map((row) => (
-            <option key={row.id} value={String(row.id)}>
-              {row.equipment} {row.serial ? `(${row.serial})` : ""}
-            </option>
-          ))}
-        </select>
+      <div className="hospital-quick-actions hospital-selection-actions">
+        <div className="selection-meta">
+          {selectedRows.length} selected
+          {selectedRows.length ? "" : " (select equipment below)"}
+        </div>
 
-        {selectedEquipment?.contactEmail ? (
-          <a className="button button-primary" href={buildMailTo(selectedEquipment, hospital)}>
+        <div className="selection-buttons">
+          <button className="button" onClick={selectAll} disabled={!rows.length}>
+            Select all
+          </button>
+          <button className="button" onClick={clearSelection} disabled={!selectedRows.length}>
+            Clear
+          </button>
+        </div>
+
+        {canEmailSelected ? (
+          <a className="button button-primary" href={selectedMailTo}>
             <Mail size={15} className="inline-icon" />
-            Email selected equipment
+            Email selected equipment ({selectedRows.length})
           </a>
         ) : (
-          <button className="button" disabled>
+          <button className="button" disabled title="Select equipment that has a contact email.">
             <Mail size={15} className="inline-icon" />
-            No contact email
+            Email selected equipment
           </button>
         )}
       </div>
@@ -94,6 +114,7 @@ export default function HospitalDetailView({ hospital, rows, onClose, getTrackin
           <table className="table">
             <thead>
               <tr>
+                <th>Select</th>
                 <th>Equipment</th>
                 <th>Department</th>
                 <th>Next PM</th>
@@ -105,8 +126,12 @@ export default function HospitalDetailView({ hospital, rows, onClose, getTrackin
               {rows.length ? (
                 rows.map((row) => {
                   const meta = getTrackingMeta(row);
+                  const isSelected = selectedEquipmentIds.includes(String(row.id));
                   return (
-                    <tr key={row.id} className={String(selectedEquipmentId) === String(row.id) ? "hospital-status-row-selected" : ""}>
+                    <tr key={row.id} className={isSelected ? "hospital-status-row-selected" : ""}>
+                      <td>
+                        <input type="checkbox" checked={isSelected} onChange={() => toggleSelection(row.id)} aria-label={`Select ${row.equipment}`} />
+                      </td>
                       <td>
                         <div className="strong">{row.equipment}</div>
                         <div className="muted">{row.serial || "No serial"}</div>
@@ -128,7 +153,7 @@ export default function HospitalDetailView({ hospital, rows, onClose, getTrackin
                 })
               ) : (
                 <tr>
-                  <td colSpan={5} className="muted">
+                  <td colSpan={6} className="muted">
                     No equipment found for this hospital.
                   </td>
                 </tr>

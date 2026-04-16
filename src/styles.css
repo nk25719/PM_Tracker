@@ -438,6 +438,22 @@ body {
   margin-bottom: 14px;
 }
 
+.hospital-selection-actions {
+  grid-template-columns: auto auto auto;
+  justify-content: space-between;
+}
+
+.selection-meta {
+  font-size: 14px;
+  color: #334155;
+  font-weight: 600;
+}
+
+.selection-buttons {
+  display: flex;
+  gap: 8px;
+}
+
 .hospital-status-view {
   border-top: 1px solid #e2e8f0;
   padding-top: 10px;
@@ -455,5 +471,9 @@ body {
 @media (max-width: 700px) {
   .hospital-quick-actions {
     grid-template-columns: 1fr;
+  }
+
+  .selection-buttons {
+    flex-wrap: wrap;
   }
 }
