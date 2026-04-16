@@ -1,7 +1,7 @@
 body {
   margin: 0;
   font-family: Arial, sans-serif;
-  background: #f1f5f9;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%);
   color: #0f172a;
 }
 
@@ -11,13 +11,13 @@ body {
 
 .app-shell {
   min-height: 100vh;
-  background: #f1f5f9;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%);
   padding: 24px;
   color: #0f172a;
 }
 
 .app-container {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
@@ -43,25 +43,25 @@ body {
 
 .card {
   background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 18px;
-  padding: 18px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #dbe7f6;
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
   color: #0f172a;
 }
 
 .button {
   padding: 10px 14px;
   border-radius: 10px;
-  border: 1px solid #94a3b8;
-  background: #f8fafc;
+  border: 1px solid #bfdbfe;
+  background: #f8fbff;
   color: #0f172a;
   cursor: pointer;
   font-weight: 500;
 }
 
 .button:hover {
-  background: #e2e8f0;
+  background: #e8f1ff;
 }
 
 .button-primary {
@@ -176,7 +176,7 @@ body {
 
 .main-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 1.8fr 1.2fr;
   gap: 16px;
   align-items: start;
 }
@@ -277,8 +277,24 @@ body {
   gap: 12px;
 }
 
+.hospital-summary-card {
+  min-width: 380px;
+}
+
+.hospital-summary-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.hospital-summary-filter {
+  max-width: 260px;
+}
+
 .hospital-item {
-  border: 1px solid #e2e8f0;
+  border: 1px solid #dbe7f6;
   border-radius: 14px;
   padding: 14px;
 }
@@ -306,7 +322,7 @@ body {
 }
 
 .stat-box {
-  background: #e2e8f0;
+  background: #eff6ff;
   border-radius: 10px;
   padding: 10px;
 }
@@ -332,6 +348,10 @@ body {
 
   .form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hospital-summary-card {
+    min-width: 0;
   }
 }
 
@@ -493,9 +513,43 @@ body {
   min-height: 190px;
 }
 
+.view-toggle-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.quick-action-block {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #dbe7f6;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.quick-action-feedback {
+  border-radius: 10px;
+  background: #eef6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.contracts-view-card .table td,
+.contracts-view-card .table th {
+  white-space: nowrap;
+}
+
 @media (max-width: 700px) {
   .hospital-quick-actions {
     grid-template-columns: 1fr;
+  }
+
+  .hospital-summary-head {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .selection-buttons {

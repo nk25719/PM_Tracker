@@ -1,0 +1,72 @@
+import React from "react";
+import { ArrowLeft, FileText } from "lucide-react";
+
+function getContractTimingLabel(daysLeft) {
+  if (daysLeft < 0) return { label: `Expired ${Math.abs(daysLeft)} day(s) ago`, className: "badge badge-overdue" };
+  if (daysLeft <= 30) return { label: `Renew within ${daysLeft} day(s)`, className: "badge badge-due-soon" };
+  return { label: `${daysLeft} day(s) remaining`, className: "badge badge-confirmed" };
+}
+
+export default function ContractTrackerView({ contracts, onBack }) {
+  return (
+    <div className="card contracts-view-card">
+      <div className="detail-head">
+        <div>
+          <h2 className="section-title">Hospital Contracts</h2>
+          <div className="hospital-headline">
+            <FileText size={16} className="inline-icon" />
+            Independent contract tracker with renewal reminders
+          </div>
+        </div>
+        <button className="button" onClick={onBack}>
+          <ArrowLeft size={15} className="inline-icon" />
+          Back to dashboard
+        </button>
+      </div>
+
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Hospital</th>
+              <th>Contract #</th>
+              <th>Start date</th>
+              <th>End date</th>
+              <th>Expiration</th>
+              <th>Renewal reminder</th>
+            </tr>
+          </thead>
+          <tbody>
+            {contracts.length ? (
+              contracts.map((contract) => {
+                const timing = getContractTimingLabel(contract.daysLeft);
+                return (
+                  <tr key={contract.id}>
+                    <td className="strong">{contract.hospital || "—"}</td>
+                    <td>{contract.contractNo || "—"}</td>
+                    <td>{contract.contractStartDate || "—"}</td>
+                    <td>{contract.contractEndDate || "—"}</td>
+                    <td>
+                      <span className={timing.className}>{timing.label}</span>
+                    </td>
+                    <td className="muted">
+                      {contract.daysLeft <= 30
+                        ? "Send renewal follow-up now."
+                        : "No immediate action needed."}
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={6} className="muted">
+                  No contracts found yet. Add contract start/end dates in equipment records to populate this view.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

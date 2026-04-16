@@ -1,12 +1,37 @@
 import React from "react";
 import { Building2 } from "lucide-react";
 
-export default function HospitalSummary({ byHospital, selectedHospital, onSelectHospital }) {
+export default function HospitalSummary({
+  byHospital,
+  selectedHospital,
+  onSelectHospital,
+  hospitalSummaryFilter,
+  onHospitalSummaryFilterChange,
+}) {
+  const visibleHospitals =
+    hospitalSummaryFilter === "All"
+      ? byHospital
+      : byHospital.filter((item) => item.hospital === hospitalSummaryFilter);
+
   return (
-    <div className="card">
-      <h2 className="section-title">Hospital Summary</h2>
+    <div className="card hospital-summary-card">
+      <div className="hospital-summary-head">
+        <h2 className="section-title">Hospital Summary</h2>
+        <select
+          className="select hospital-summary-filter"
+          value={hospitalSummaryFilter}
+          onChange={(event) => onHospitalSummaryFilterChange(event.target.value)}
+        >
+          <option value="All">All hospitals</option>
+          {byHospital.map((item) => (
+            <option key={item.hospital} value={item.hospital}>
+              {item.hospital}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="hospital-list">
-        {byHospital.map((item) => (
+        {visibleHospitals.map((item) => (
           <button
             key={item.hospital}
             className={`hospital-item hospital-button ${selectedHospital === item.hospital ? "hospital-item-active" : ""}`}

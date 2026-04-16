@@ -65,6 +65,8 @@ export function normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate)
         (intervalMonths > 0 ? Math.max(1, Math.round(12 / intervalMonths)) : 1);
       const nextPmDate = row["Next PM Date"] || row.nextPmDate || getTodayIsoDate();
       const status = normalizeStatus(row.Status || row.status || "Upcoming");
+      const contractStartDate = row["Contract Start Date"] || row.contractStartDate || "";
+      const contractEndDate = row["Contract End Date"] || row.contractEndDate || "";
       const engineer = row["Engineer Assigned"] || row.engineer || "";
       const contactEmail = row["Hospital Contact Email"] || row.contactEmail || "";
       const department = row.Department || row.department || "";
@@ -93,6 +95,8 @@ export function normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate)
         lastPmDate,
         completionDate,
         status,
+        contractStartDate,
+        contractEndDate,
         engineer,
         contactEmail,
         reminder1Sent: csvBoolean(row["Reminder 1 Sent"] || row.reminder1Sent, row["Reminder 1 Sent"]),
@@ -126,6 +130,8 @@ export function exportRowsToCsv(rows, getIntervalMonths) {
     "Last PM Date",
     "Completion Date",
     "Status",
+    "Contract Start Date",
+    "Contract End Date",
     "Engineer Assigned",
     "Hospital Contact Email",
     "Reminder 1 Sent",
@@ -154,6 +160,8 @@ export function exportRowsToCsv(rows, getIntervalMonths) {
           row.lastPmDate,
           row.completionDate,
           row.status,
+          row.contractStartDate,
+          row.contractEndDate,
           row.engineer,
           row.contactEmail,
           row.reminder1Sent ? "Yes" : "No",

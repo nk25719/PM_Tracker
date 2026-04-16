@@ -29,7 +29,7 @@ function buildEmailDraft(pendingRows, hospital) {
   return { subject, body };
 }
 
-export default function HospitalDetailView({ hospital, rows, onBack, getTrackingMeta }) {
+export default function HospitalDetailView({ hospital, rows, onBack, getTrackingMeta, onSendHospitalEmail }) {
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState([]);
   const [copied, setCopied] = useState(false);
 
@@ -87,6 +87,11 @@ export default function HospitalDetailView({ hospital, rows, onBack, getTracking
     }
   }
 
+  function handleOpenEmailClient() {
+    if (!canEmailSelected) return;
+    onSendHospitalEmail?.(rowsForEmail);
+  }
+
   return (
     <div className="card">
       <div className="detail-head">
@@ -119,7 +124,7 @@ export default function HospitalDetailView({ hospital, rows, onBack, getTracking
         </div>
 
         {canEmailSelected ? (
-          <a className="button button-primary" href={selectedMailTo}>
+          <a className="button button-primary" href={selectedMailTo} onClick={handleOpenEmailClient}>
             <Mail size={15} className="inline-icon" />
             Open email client
           </a>
