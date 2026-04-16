@@ -27,8 +27,8 @@ export default function DashboardCards({ metrics }) {
       <div className="card">
         <div className="metric-row">
           <div>
-            <div className="metric-label">Due in 7 Days</div>
-            <div className="metric-value">{metrics.dueSoon}</div>
+            <div className="metric-label">Due This Week</div>
+            <div className="metric-value">{metrics.dueThisWeek}</div>
           </div>
           <Bell />
         </div>
