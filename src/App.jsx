@@ -49,7 +49,7 @@ const initialData = [
     reminderDates: "2026-03-27, 2026-04-04",
     lastPmDate: "2026-01-11",
     completionDate: "",
-    status: "Overdue",
+    status: "Hospital notified",
     engineer: "Nadim",
     contactEmail: "maintenance@rizk.example.com",
     reminder1Sent: true,
@@ -108,7 +108,15 @@ const statuses = [
   "In progress",
   "Completed",
   "Overdue",
+  "Deferred",
 ];
+
+const editableStatuses = statuses.filter((status) => !["All", "Overdue"].includes(status));
+
+function normalizeStatus(status) {
+  if (status === "Overdue") return "Upcoming";
+  return editableStatuses.includes(status) ? status : "Upcoming";
+}
 
 function getDaysUntil(dateStr) {
   const today = new Date();
@@ -118,11 +126,6 @@ function getDaysUntil(dateStr) {
   return Math.round((target - today) / (1000 * 60 * 60 * 24));
 }
 
-function getOverdueStatus(dateStr, status) {
-  if (status === "Completed") return "Completed";
-  return getDaysUntil(dateStr) < 0 ? "Overdue" : "On Track";
-}
-
 function isDueThisMonth(dateStr) {
   const target = new Date(dateStr);
   const today = new Date();
@@ -130,6 +133,38 @@ function isDueThisMonth(dateStr) {
     target.getFullYear() === today.getFullYear() &&
     target.getMonth() === today.getMonth()
   );
+}
+
+function getIntervalMonths(pmsPerYear) {
+  const count = Number(pmsPerYear) || 1;
+  return Number((12 / count).toFixed(2));
+}
+
+function getTrackingMeta(row) {
+  const status = row.status || "Upcoming";
+  const daysUntil = getDaysUntil(row.nextPmDate);
+  const isDoneState = status === "Completed" || status === "Deferred";
+  const isOverdue = !isDoneState && daysUntil < 0;
+  const dueSoon7 = !isDoneState && daysUntil >= 0 && daysUntil <= 7;
+  const dueSoon14 = !isDoneState && daysUntil >= 0 && daysUntil <= 14;
+
+  return {
+    daysUntil,
+    isOverdue,
+    dueSoon7,
+    dueSoon14,
+    intervalMonths: getIntervalMonths(row.pmsPerYear),
+    effectiveStatus: isOverdue ? "Overdue" : status,
+  };
+}
+
+function addMonths(dateStr, months) {
+  if (!dateStr) return "";
+  const base = new Date(dateStr);
+  if (Number.isNaN(base.getTime())) return "";
+  const out = new Date(base);
+  out.setMonth(out.getMonth() + months);
+  return out.toISOString().slice(0, 10);
 }
 
 function parseCsvLine(line) {
@@ -179,10 +214,13 @@ function normalizeImportedRows(rawRows) {
         "";
       const model = row.Model || row.model || "";
       const serial = row["Serial Number"] || row.serial || row.Serial || "";
-      const pmsPerYear = Number(row["PMs per Year"] || row.pmsPerYear || 1) || 1;
+      const intervalMonths = Number(row["Interval Months"] || row.intervalMonths || 0) || 0;
+      const pmsPerYear =
+        Number(row["PMs per Year"] || row.pmsPerYear || 0) ||
+        (intervalMonths > 0 ? Math.max(1, Math.round(12 / intervalMonths)) : 1);
       const nextPmDate =
         row["Next PM Date"] || row.nextPmDate || new Date().toISOString().slice(0, 10);
-      const status = row.Status || row.status || "Upcoming";
+      const status = normalizeStatus(row.Status || row.status || "Upcoming");
       const engineer = row["Engineer Assigned"] || row.engineer || "";
       const contactEmail = row["Hospital Contact Email"] || row.contactEmail || "";
       const department = row.Department || row.department || "";
@@ -254,6 +292,10 @@ export default function App() {
       reminderDates: row.reminderDates || "",
       lastPmDate: row.lastPmDate || "",
       completionDate: row.completionDate || "",
+      reminder1Sent: Boolean(row.reminder1Sent),
+      reminder2Sent: Boolean(row.reminder2Sent),
+      engineerAlertSent: Boolean(row.engineerAlertSent),
+      status: normalizeStatus(row.status || "Upcoming"),
     }));
   });
 
@@ -296,15 +338,19 @@ export default function App() {
         .includes(search.toLowerCase());
 
       const matchesHospital = hospitalFilter === "All" || row.hospital === hospitalFilter;
-      const matchesStatus = statusFilter === "All" || row.status === statusFilter;
+      const meta = getTrackingMeta(row);
+      const matchesStatus =
+        statusFilter === "All" ||
+        row.status === statusFilter ||
+        (statusFilter === "Overdue" && meta.isOverdue);
 
-      const daysUntil = getDaysUntil(row.nextPmDate);
-      const overdueStatus = getOverdueStatus(row.nextPmDate, row.status);
       const matchesTiming =
         timingFilter === "All" ||
-        (timingFilter === "Overdue only" && overdueStatus === "Overdue") ||
-        (timingFilter === "Due this week" && daysUntil >= 0 && daysUntil <= 7 && row.status !== "Completed") ||
-        (timingFilter === "Due this month" && isDueThisMonth(row.nextPmDate) && row.status !== "Completed") ||
+        (timingFilter === "Overdue only" && meta.isOverdue) ||
+        (timingFilter === "Due this week" && meta.dueSoon7) ||
+        (timingFilter === "Due this month" &&
+          isDueThisMonth(row.nextPmDate) &&
+          meta.effectiveStatus !== "Completed") ||
         (timingFilter === "Completed" && row.status === "Completed");
 
       return matchesSearch && matchesHospital && matchesStatus && matchesTiming;
@@ -320,8 +366,8 @@ export default function App() {
       }
 
       if (sortBy === "Overdue") {
-        const aOverdue = getOverdueStatus(a.nextPmDate, a.status) === "Overdue" ? 0 : 1;
-        const bOverdue = getOverdueStatus(b.nextPmDate, b.status) === "Overdue" ? 0 : 1;
+        const aOverdue = getTrackingMeta(a).isOverdue ? 0 : 1;
+        const bOverdue = getTrackingMeta(b).isOverdue ? 0 : 1;
         if (aOverdue !== bOverdue) return aOverdue - bOverdue;
         return getDaysUntil(a.nextPmDate) - getDaysUntil(b.nextPmDate);
       }
@@ -336,13 +382,8 @@ export default function App() {
 
   const metrics = useMemo(() => {
     const total = rows.length;
-    const overdue = rows.filter(
-      (r) => getOverdueStatus(r.nextPmDate, r.status) === "Overdue"
-    ).length;
-    const dueSoon = rows.filter((r) => {
-      const days = getDaysUntil(r.nextPmDate);
-      return days >= 0 && days <= 7 && r.status !== "Completed";
-    }).length;
+    const overdue = rows.filter((r) => getTrackingMeta(r).isOverdue).length;
+    const dueSoon = rows.filter((r) => getTrackingMeta(r).dueSoon7).length;
     const completed = rows.filter((r) => r.status === "Completed").length;
     return { total, overdue, dueSoon, completed };
   }, [rows]);
@@ -351,14 +392,18 @@ export default function App() {
     const map = {};
     rows.forEach((row) => {
       if (!map[row.hospital]) {
-        map[row.hospital] = { total: 0, overdue: 0, upcoming: 0 };
+        map[row.hospital] = { total: 0, overdue: 0, upcoming: 0, dueSoon: 0 };
       }
+      const meta = getTrackingMeta(row);
       map[row.hospital].total += 1;
-      if (getOverdueStatus(row.nextPmDate, row.status) === "Overdue") {
+      if (meta.isOverdue) {
         map[row.hospital].overdue += 1;
       }
       if (row.status === "Upcoming") {
         map[row.hospital].upcoming += 1;
+      }
+      if (meta.dueSoon7) {
+        map[row.hospital].dueSoon += 1;
       }
     });
     return Object.entries(map).map(([hospital, values]) => ({
@@ -398,6 +443,7 @@ export default function App() {
       "Model",
       "Serial Number",
       "PMs per Year",
+      "Interval Months",
       "Next PM Date",
       "Department",
       "Notes",
@@ -422,6 +468,7 @@ export default function App() {
             row.model,
             row.serial,
             row.pmsPerYear,
+            getIntervalMonths(row.pmsPerYear),
             row.nextPmDate,
             row.department,
             row.notes,
@@ -512,22 +559,45 @@ export default function App() {
 
   function handleSubmitEquipment(event) {
     event.preventDefault();
+    const normalizedPmsPerYear = Number(equipmentForm.pmsPerYear) || 1;
+    const intervalMonths = Math.max(1, Math.round(12 / normalizedPmsPerYear));
+    const autoNextPmDate =
+      equipmentForm.status === "Completed" && equipmentForm.completionDate
+        ? addMonths(equipmentForm.completionDate, intervalMonths)
+        : equipmentForm.nextPmDate;
+
     const payload = {
       ...equipmentForm,
-      pmsPerYear: Number(equipmentForm.pmsPerYear) || 1,
+      pmsPerYear: normalizedPmsPerYear,
+      nextPmDate: autoNextPmDate,
+      lastPmDate:
+        equipmentForm.status === "Completed" && equipmentForm.completionDate
+          ? equipmentForm.completionDate
+          : equipmentForm.lastPmDate,
     };
 
     if (editingId) {
       updateRow(editingId, payload);
     } else {
-      setRows((current) => [{ id: Date.now(), ...payload }, ...current]);
+      setRows((current) => [
+        {
+          id: Date.now(),
+          reminder1Sent: false,
+          reminder2Sent: false,
+          engineerAlertSent: false,
+          ...payload,
+        },
+        ...current,
+      ]);
     }
     resetForm();
   }
 
-  function badgeClass(status, overdueStatus) {
+  function badgeClass(status, meta) {
     if (status === "Completed") return "badge badge-completed";
-    if (overdueStatus === "Overdue") return "badge badge-overdue";
+    if (status === "Deferred") return "badge badge-deferred";
+    if (meta.isOverdue) return "badge badge-overdue";
+    if (meta.dueSoon7) return "badge badge-due-soon";
     if (status === "Confirmed") return "badge badge-confirmed";
     return "badge badge-default";
   }
@@ -654,7 +724,7 @@ export default function App() {
                   value={equipmentForm.status}
                   onChange={(e) => handleFormChange("status", e.target.value)}
                 >
-                  {statuses.filter((status) => status !== "All").map((status) => (
+                  {editableStatuses.map((status) => (
                     <option key={status} value={status}>
                       {status}
                     </option>
@@ -800,17 +870,20 @@ export default function App() {
                     <th>Equipment</th>
                     <th>Model</th>
                     <th>Department</th>
+                    <th>Frequency</th>
                     <th>Next PM</th>
                     <th>Last PM</th>
                     <th>Completion</th>
                     <th>Engineer</th>
+                    <th>Reminders</th>
+                    <th>Due-soon Flags</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRows.map((row) => {
-                    const overdueStatus = getOverdueStatus(row.nextPmDate, row.status);
+                    const meta = getTrackingMeta(row);
                     return (
                       <tr key={row.id}>
                         <td>{row.hospital}</td>
@@ -821,17 +894,33 @@ export default function App() {
                         <td>{row.model}</td>
                         <td>{row.department || "—"}</td>
                         <td>
+                          <div>{row.pmsPerYear} PM/year</div>
+                          <div className="muted">{meta.intervalMonths} month interval</div>
+                        </td>
+                        <td>
                           <div>{row.nextPmDate}</div>
-                          <div className="muted">{getDaysUntil(row.nextPmDate)} days</div>
+                          <div className="muted">{meta.daysUntil} days</div>
                         </td>
                         <td>{row.lastPmDate || "—"}</td>
                         <td>{row.completionDate || "—"}</td>
                         <td>{row.engineer}</td>
+                        <td className="muted">
+                          <div>R1: {row.reminder1Sent ? "Sent" : "Pending"}</div>
+                          <div>R2: {row.reminder2Sent ? "Sent" : "Pending"}</div>
+                          <div>Alert: {row.engineerAlertSent ? "Sent" : "Pending"}</div>
+                        </td>
+                        <td className="muted">
+                          {meta.isOverdue
+                            ? "Overdue"
+                            : meta.dueSoon7
+                              ? "Due within 7 days"
+                              : meta.dueSoon14
+                                ? "Due within 14 days"
+                                : "Not due soon"}
+                        </td>
                         <td>
-                          <span className={badgeClass(row.status, overdueStatus)}>
-                            {overdueStatus === "Overdue" && row.status !== "Completed"
-                              ? "Overdue"
-                              : row.status}
+                          <span className={badgeClass(row.status, meta)}>
+                            {meta.effectiveStatus}
                           </span>
                         </td>
                         <td>
@@ -864,7 +953,19 @@ export default function App() {
                             </button>
                             <button
                               className="button"
-                              onClick={() => updateRow(row.id, { status: "Completed" })}
+                              onClick={() => {
+                                const today = new Date().toISOString().slice(0, 10);
+                                const intervalMonths = Math.max(
+                                  1,
+                                  Math.round(12 / (Number(row.pmsPerYear) || 1))
+                                );
+                                updateRow(row.id, {
+                                  status: "Completed",
+                                  completionDate: today,
+                                  lastPmDate: today,
+                                  nextPmDate: addMonths(today, intervalMonths),
+                                });
+                              }}
                             >
                               Complete
                             </button>
@@ -932,6 +1033,10 @@ export default function App() {
                       <div className="stat-box">
                         <div className="stat-label">Upcoming</div>
                         <div className="stat-value">{item.upcoming}</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-label">Due in 7d</div>
+                        <div className="stat-value">{item.dueSoon}</div>
                       </div>
                       <div className="stat-box">
                         <div className="stat-label">Overdue</div>
