@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
-import { AlertTriangle, Bell, Wrench } from "lucide-react";
+import { AlertTriangle, Bell } from "lucide-react";
 import { loadRowsFromStorage, saveRowsToStorage } from "./storage";
 import DashboardCards from "./components/DashboardCards";
 import EquipmentTable from "./components/EquipmentTable";
@@ -139,7 +139,6 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [timingFilter, setTimingFilter] = useState("All");
   const [sortBy, setSortBy] = useState("None");
-  const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [equipmentForm, setEquipmentForm] = useState(defaultEquipmentForm);
   const [detailRow, setDetailRow] = useState(null);
@@ -430,21 +429,21 @@ export default function App() {
     setEquipmentForm(createDefaultEquipmentForm());
     setBulkEquipmentText("");
     setEditingId(null);
-    setShowForm(false);
+    setCurrentPage("dashboard");
   }
 
   function startAdd() {
     setEquipmentForm(createDefaultEquipmentForm());
     setBulkEquipmentText("");
     setEditingId(null);
-    setShowForm(true);
+    setCurrentPage("add-equipment");
   }
 
   function startEdit(row) {
     setEquipmentForm(createEquipmentFormFromRow(row));
     setBulkEquipmentText("");
     setEditingId(row.id);
-    setShowForm(true);
+    setCurrentPage("add-equipment");
   }
 
   function handleDelete(id) {
@@ -737,79 +736,10 @@ export default function App() {
             onImportChange={handleImportFile}
             onExportCsv={() => exportRowsToCsv(rows, getIntervalMonths)}
             onExportJson={() => exportRowsToJson(rows)}
-            onStartAdd={startAdd}
           />
         </div>
 
-        {showForm ? (
-          <div className="card form-card">
-            <div className="form-head">
-              <h2 className="section-title">{editingId ? "Edit Equipment" : "Add Equipment"}</h2>
-              <button className="button" onClick={resetForm}>
-                Cancel
-              </button>
-            </div>
-            <form className="equipment-form" onSubmit={handleSubmitEquipment}>
-              <div className="form-grid">
-                <input required className="input" placeholder="Hospital" value={equipmentForm.hospital} onChange={(e) => handleFormChange("hospital", e.target.value)} />
-                <input className="input" placeholder="Contract No." value={equipmentForm.contractNo} onChange={(e) => handleFormChange("contractNo", e.target.value)} />
-                <input required={!bulkEquipmentText.trim()} className="input" placeholder="Equipment" value={equipmentForm.equipment} onChange={(e) => handleFormChange("equipment", e.target.value)} />
-                <input className="input" placeholder="Model" value={equipmentForm.model} onChange={(e) => handleFormChange("model", e.target.value)} />
-                <input className="input" placeholder="Serial" value={equipmentForm.serial} onChange={(e) => handleFormChange("serial", e.target.value)} />
-                <input className="input" placeholder="Department" value={equipmentForm.department} onChange={(e) => handleFormChange("department", e.target.value)} />
-                <input className="input" type="number" min="1" placeholder="PMs per Year" value={equipmentForm.pmsPerYear} onChange={(e) => handleFormChange("pmsPerYear", e.target.value)} />
-                <input className="input" type="date" value={equipmentForm.nextPmDate} onChange={(e) => handleFormChange("nextPmDate", e.target.value)} />
-                <input className="input" type="date" value={equipmentForm.lastPmDate} onChange={(e) => handleFormChange("lastPmDate", e.target.value)} />
-                <input className="input" type="date" value={equipmentForm.completionDate} onChange={(e) => handleFormChange("completionDate", e.target.value)} />
-                <input
-                  className="input"
-                  type="date"
-                  aria-label="Contract start date"
-                  title="Contract start date"
-                  value={equipmentForm.contractStartDate}
-                  onChange={(e) => handleFormChange("contractStartDate", e.target.value)}
-                />
-                <input
-                  className="input"
-                  type="date"
-                  aria-label="Contract end date"
-                  title="Contract end date"
-                  value={equipmentForm.contractEndDate}
-                  onChange={(e) => handleFormChange("contractEndDate", e.target.value)}
-                />
-                <input className="input" placeholder="Reminder dates (comma-separated)" value={equipmentForm.reminderDates} onChange={(e) => handleFormChange("reminderDates", e.target.value)} />
-                <select className="select" value={equipmentForm.status} onChange={(e) => handleFormChange("status", e.target.value)}>
-                  {editableStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-                <input className="input" placeholder="Engineer" value={equipmentForm.engineer} onChange={(e) => handleFormChange("engineer", e.target.value)} />
-                <input className="input" type="email" placeholder="Hospital Contact Email" value={equipmentForm.contactEmail} onChange={(e) => handleFormChange("contactEmail", e.target.value)} />
-                <input className="input" placeholder="Updated by" value={equipmentForm.updatedBy} onChange={(e) => handleFormChange("updatedBy", e.target.value)} />
-              </div>
-              {!editingId ? (
-                <div className="bulk-add-wrap">
-                  <div className="strong">Bulk equipment add (same hospital + contract)</div>
-                  <div className="muted">One line per item. Format: Equipment | Model | Serial | Department</div>
-                  <textarea
-                    className="input textarea"
-                    placeholder={"Ventilator | Servo-U | ICU-009 | ICU\nSuction Pump | New Askir | ICU-011 | ICU"}
-                    value={bulkEquipmentText}
-                    onChange={(e) => setBulkEquipmentText(e.target.value)}
-                  />
-                </div>
-              ) : null}
-              <textarea className="input textarea" placeholder="Notes" value={equipmentForm.notes} onChange={(e) => handleFormChange("notes", e.target.value)} />
-              <button className="button button-primary" type="submit">
-                {editingId ? "Save Changes" : bulkEquipmentText.trim() ? "Add Equipment in Bulk" : "Add Equipment"}
-              </button>
-            </form>
-          </div>
-        ) : null}
-
-        <DashboardCards metrics={metrics} />
+        {currentPage !== "add-equipment" ? <DashboardCards metrics={metrics} /> : null}
         <div className="view-toggle-row">
           <button className={`button ${currentPage === "dashboard" ? "button-primary" : ""}`} onClick={() => setCurrentPage("dashboard")}>
             Dashboard
@@ -819,6 +749,9 @@ export default function App() {
           </button>
           <button className={`button ${currentPage === "contracts" ? "button-primary" : ""}`} onClick={openContractsView}>
             Contracts View
+          </button>
+          <button className={`button ${currentPage === "add-equipment" ? "button-primary" : ""}`} onClick={startAdd}>
+            Add Equipment
           </button>
         </div>
 
@@ -839,7 +772,54 @@ export default function App() {
           />
         ) : null}
 
-        {currentPage === "hospital-detail" ? (
+        {currentPage === "add-equipment" ? (
+          <div className="card form-card">
+            <div className="form-head">
+              <h2 className="section-title">{editingId ? "Edit Equipment" : "Add Equipment"}</h2>
+              <button className="button" onClick={resetForm}>
+                Cancel
+              </button>
+            </div>
+            <form className="equipment-form" onSubmit={handleSubmitEquipment}>
+              <div className="form-grid">
+                <input required className="input" placeholder="Hospital" value={equipmentForm.hospital} onChange={(e) => handleFormChange("hospital", e.target.value)} />
+                <input className="input" placeholder="Contract No." value={equipmentForm.contractNo} onChange={(e) => handleFormChange("contractNo", e.target.value)} />
+                <input required={!bulkEquipmentText.trim()} className="input" placeholder="Equipment" value={equipmentForm.equipment} onChange={(e) => handleFormChange("equipment", e.target.value)} />
+                <input className="input" placeholder="Model" value={equipmentForm.model} onChange={(e) => handleFormChange("model", e.target.value)} />
+                <input className="input" placeholder="Serial" value={equipmentForm.serial} onChange={(e) => handleFormChange("serial", e.target.value)} />
+                <input className="input" placeholder="Department" value={equipmentForm.department} onChange={(e) => handleFormChange("department", e.target.value)} />
+                <input className="input" type="number" min="1" placeholder="PMs per Year" value={equipmentForm.pmsPerYear} onChange={(e) => handleFormChange("pmsPerYear", e.target.value)} />
+                <input className="input" type="date" value={equipmentForm.nextPmDate} onChange={(e) => handleFormChange("nextPmDate", e.target.value)} />
+                <input className="input" type="date" value={equipmentForm.lastPmDate} onChange={(e) => handleFormChange("lastPmDate", e.target.value)} />
+                <input className="input" type="date" value={equipmentForm.completionDate} onChange={(e) => handleFormChange("completionDate", e.target.value)} />
+                <input className="input" type="date" aria-label="Contract start date" title="Contract start date" value={equipmentForm.contractStartDate} onChange={(e) => handleFormChange("contractStartDate", e.target.value)} />
+                <input className="input" type="date" aria-label="Contract end date" title="Contract end date" value={equipmentForm.contractEndDate} onChange={(e) => handleFormChange("contractEndDate", e.target.value)} />
+                <input className="input" placeholder="Reminder dates (comma-separated)" value={equipmentForm.reminderDates} onChange={(e) => handleFormChange("reminderDates", e.target.value)} />
+                <select className="select" value={equipmentForm.status} onChange={(e) => handleFormChange("status", e.target.value)}>
+                  {editableStatuses.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+                <input className="input" placeholder="Engineer" value={equipmentForm.engineer} onChange={(e) => handleFormChange("engineer", e.target.value)} />
+                <input className="input" type="email" placeholder="Hospital Contact Email" value={equipmentForm.contactEmail} onChange={(e) => handleFormChange("contactEmail", e.target.value)} />
+                <input className="input" placeholder="Updated by" value={equipmentForm.updatedBy} onChange={(e) => handleFormChange("updatedBy", e.target.value)} />
+              </div>
+              {!editingId ? (
+                <div className="bulk-add-wrap">
+                  <div className="strong">Bulk equipment add (same hospital + contract)</div>
+                  <div className="muted">One line per item. Format: Equipment | Model | Serial | Department</div>
+                  <textarea className="input textarea" placeholder={"Ventilator | Servo-U | ICU-009 | ICU\nSuction Pump | New Askir | ICU-011 | ICU"} value={bulkEquipmentText} onChange={(e) => setBulkEquipmentText(e.target.value)} />
+                </div>
+              ) : null}
+              <textarea className="input textarea" placeholder="Notes" value={equipmentForm.notes} onChange={(e) => handleFormChange("notes", e.target.value)} />
+              <button className="button button-primary" type="submit">
+                {editingId ? "Save Changes" : bulkEquipmentText.trim() ? "Add Equipment in Bulk" : "Add Equipment"}
+              </button>
+            </form>
+          </div>
+        ) : currentPage === "hospital-detail" ? (
           <HospitalDetailView
             hospital={selectedHospitalDetail}
             rows={hospitalDetailRows}
@@ -866,10 +846,6 @@ export default function App() {
                   <button className="button" onClick={handleUpcomingReminderAction}>
                     <Bell size={16} className="inline-icon" />
                     Send Upcoming PM Reminders
-                  </button>
-                  <button className="button" onClick={() => handleNotifyEngineersQuickAction()}>
-                    <Wrench size={16} className="inline-icon" />
-                    Notify Engineers
                   </button>
                   <button className="button" onClick={showOverdueQuickAction}>
                     <AlertTriangle size={16} className="inline-icon" />

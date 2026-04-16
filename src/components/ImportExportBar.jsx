@@ -1,7 +1,6 @@
 import React from "react";
-import { Plus } from "lucide-react";
 
-export default function ImportExportBar({ fileInputRef, onImportChange, onExportCsv, onExportJson, onStartAdd }) {
+export default function ImportExportBar({ fileInputRef, onImportChange, onExportCsv, onExportJson }) {
   return (
     <div className="actions">
       <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden-input" onChange={onImportChange} />
@@ -13,10 +12,6 @@ export default function ImportExportBar({ fileInputRef, onImportChange, onExport
       </button>
       <button className="button" onClick={onExportJson}>
         Export JSON
-      </button>
-      <button className="button button-primary" onClick={onStartAdd}>
-        <Plus size={16} className="inline-icon" />
-        Add Equipment
       </button>
     </div>
   );
