@@ -20,7 +20,6 @@ import {
 } from "./utils/dateUtils";
 import {
   exportRowsToCsv,
-  exportRowsToJson,
   normalizeImportedRows,
   parseImportFile,
 } from "./utils/csvUtils";
@@ -151,6 +150,23 @@ export default function App() {
   const [quickActionFeedback, setQuickActionFeedback] = useState("");
   const fileInputRef = useRef(null);
   const contractFileInputRef = useRef(null);
+
+  const aiInsights = useMemo(() => {
+    const overdueRows = rows.filter((row) => getTrackingMeta(row).isOverdue);
+    const soonRows = rows.filter((row) => getTrackingMeta(row).dueSoon7);
+    const grouped = overdueRows.reduce((acc, row) => {
+      acc[row.hospital] = (acc[row.hospital] || 0) + 1;
+      return acc;
+    }, {});
+    const riskiestHospital =
+      Object.entries(grouped).sort((a, b) => b[1] - a[1])[0] || null;
+
+    return {
+      overdueRows,
+      soonRows,
+      riskiestHospital,
+    };
+  }, [rows]);
 
   useEffect(() => {
     let isMounted = true;
@@ -289,6 +305,11 @@ export default function App() {
       .sort((a, b) => a.daysLeft - b.daysLeft);
   }, [rows]);
 
+  const parsedBulkItems = useMemo(
+    () => parseBulkEquipmentLines(bulkEquipmentText),
+    [bulkEquipmentText]
+  );
+
   function openHospitalDetail(hospital) {
     setSelectedHospitalDetail(hospital);
     setCurrentPage("hospital-detail");
@@ -393,18 +414,6 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
-  function exportContractsToJson() {
-    const blob = new Blob([JSON.stringify(contractRows, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "pm-contracts-data.json";
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }
-
   function updateRow(id, patch, actor = "System") {
     const today = getTodayIsoDate();
     setRows((current) =>
@@ -451,12 +460,13 @@ export default function App() {
   }
 
   function parseBulkEquipmentLines(text) {
+    const delimiter = text.includes("|") ? "|" : ",";
     return text
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
-        const [equipment, model, serial, department] = line.split("|").map((part) => (part || "").trim());
+        const [equipment, serial, model, department] = line.split(delimiter).map((part) => (part || "").trim());
         return { equipment, model, serial, department };
       })
       .filter((item) => item.equipment);
@@ -510,7 +520,7 @@ export default function App() {
           : equipmentForm.lastPmDate,
     };
 
-    const bulkItems = !editingId ? parseBulkEquipmentLines(bulkEquipmentText) : [];
+    const bulkItems = !editingId ? parsedBulkItems : [];
     const isBulkAdd = bulkItems.length > 0;
 
     if (editingId) {
@@ -731,6 +741,14 @@ export default function App() {
     }
     if (nextTimingFilter === "Due this week") {
       setQuickActionFeedback("Showing equipment due this week in the main table.");
+      return;
+    }
+    if (nextTimingFilter === "Overdue only") {
+      setQuickActionFeedback("Showing overdue equipment in the main table.");
+      return;
+    }
+    if (nextTimingFilter === "Completed") {
+      setQuickActionFeedback("Showing completed maintenance items in the main table.");
     }
   }
 
@@ -747,7 +765,6 @@ export default function App() {
             fileInputRef={fileInputRef}
             onImportChange={handleImportFile}
             onExportCsv={() => exportRowsToCsv(rows, getIntervalMonths)}
-            onExportJson={() => exportRowsToJson(rows)}
           />
         </div>
 
@@ -822,9 +839,30 @@ export default function App() {
               </div>
               {!editingId ? (
                 <div className="bulk-add-wrap">
-                  <div className="strong">Bulk equipment add (same hospital + contract)</div>
-                  <div className="muted">One line per item. Format: Equipment | Model | Serial | Department</div>
-                  <textarea className="input textarea" placeholder={"Ventilator | Servo-U | ICU-009 | ICU\nSuction Pump | New Askir | ICU-011 | ICU"} value={bulkEquipmentText} onChange={(e) => setBulkEquipmentText(e.target.value)} />
+                  <div className="strong">Bulk equipment add for this hospital + contract</div>
+                  <div className="muted">
+                    Enter one item per line using either <strong>Equipment | Serial | Model | Department</strong> or comma-separated format.
+                    Contract dates, PM dates, and contact details from this form are applied to all listed equipment.
+                  </div>
+                  <textarea
+                    className="input textarea bulk-add-textarea"
+                    placeholder={"Patient Monitor | MLH-PM-009 | B105 | ICU\nDefibrillator, DEF-544, Lifepak 20, ER"}
+                    value={bulkEquipmentText}
+                    onChange={(e) => setBulkEquipmentText(e.target.value)}
+                  />
+                  {parsedBulkItems.length ? (
+                    <div className="bulk-preview">
+                      <div className="muted">{parsedBulkItems.length} equipment item(s) ready to add</div>
+                      <div className="bulk-preview-list">
+                        {parsedBulkItems.map((item, index) => (
+                          <div key={`${item.equipment}-${item.serial}-${index}`} className="bulk-preview-item">
+                            <div className="strong">{item.equipment}</div>
+                            <div className="muted">{item.serial || "No serial"} · {item.model || "No model"} · {item.department || "No department"}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               <textarea className="input textarea" placeholder="Notes" value={equipmentForm.notes} onChange={(e) => handleFormChange("notes", e.target.value)} />
@@ -865,6 +903,20 @@ export default function App() {
                     <AlertTriangle size={16} className="inline-icon" />
                     View Overdue Equipment
                   </button>
+                  <div className="quick-action-block ai-insight-card">
+                    <div className="strong">AI Recommendations</div>
+                    <div className="muted">
+                      {aiInsights.riskiestHospital
+                        ? `${aiInsights.riskiestHospital[0]} has the highest overdue load (${aiInsights.riskiestHospital[1]}).`
+                        : "No overdue risk hotspots right now."}
+                    </div>
+                    <div className="muted">
+                      {aiInsights.soonRows.length} equipment item(s) are due in 7 days. Prioritize engineer dispatch now.
+                    </div>
+                    <button className="button button-soft" onClick={() => handleNotifyEngineersQuickAction(aiInsights.soonRows, "AI suggested due-soon dispatch")}>
+                      Send AI-Suggested Dispatch
+                    </button>
+                  </div>
                   {quickActionFeedback ? <div className="quick-action-feedback">{quickActionFeedback}</div> : null}
                 </div>
               </div>
@@ -879,7 +931,6 @@ export default function App() {
             contractFileInputRef={contractFileInputRef}
             onImportContracts={handleImportContractsFile}
             onExportContractsCsv={exportContractsToCsv}
-            onExportContractsJson={exportContractsToJson}
           />
         ) : (
           <EquipmentTable
