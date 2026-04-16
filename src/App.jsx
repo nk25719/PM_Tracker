@@ -151,6 +151,7 @@ export default function App() {
   const [reminderScheduleAt, setReminderScheduleAt] = useState("");
   const [quickActionFeedback, setQuickActionFeedback] = useState("");
   const fileInputRef = useRef(null);
+  const contractFileInputRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -294,13 +295,12 @@ export default function App() {
     setCurrentPage("hospital-detail");
   }
 
-  function closeHospitalDetail() {
-    setCurrentPage("dashboard");
-    setSelectedHospitalDetail(null);
-  }
-
   function openContractsView() {
     setCurrentPage("contracts");
+  }
+
+  function openHospitalStatusView() {
+    setCurrentPage("hospital-status");
   }
 
   function closeContractsView() {
@@ -316,6 +316,85 @@ export default function App() {
     const imported = normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate);
     if (imported.length) setRows(normalizeRows(imported));
     event.target.value = "";
+  }
+
+  async function handleImportContractsFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const text = await file.text();
+    const importedRows = parseCsvText(text);
+
+    if (!importedRows.length) {
+      event.target.value = "";
+      return;
+    }
+
+    const normalizedContracts = importedRows
+      .map((row) => ({
+        hospital: row.Hospital || row.hospital || "",
+        contractNo: row["Contract No."] || row.contractNo || row["Contract Number"] || "",
+        contractStartDate: row["Contract Start Date"] || row.contractStartDate || "",
+        contractEndDate: row["Contract End Date"] || row.contractEndDate || "",
+      }))
+      .filter((row) => row.hospital || row.contractNo);
+
+    if (!normalizedContracts.length) {
+      event.target.value = "";
+      return;
+    }
+
+    const contractsMap = new Map(
+      normalizedContracts.map((contract) => [`${contract.hospital}::${contract.contractNo}`, contract])
+    );
+
+    setRows((current) =>
+      current.map((row) => {
+        const contractKey = `${row.hospital || ""}::${row.contractNo || ""}`;
+        const importedContract = contractsMap.get(contractKey);
+        if (!importedContract) return row;
+        return {
+          ...row,
+          contractStartDate: importedContract.contractStartDate,
+          contractEndDate: importedContract.contractEndDate,
+        };
+      })
+    );
+
+    event.target.value = "";
+  }
+
+  function exportContractsToCsv() {
+    const headers = ["Hospital", "Contract No.", "Contract Start Date", "Contract End Date", "Days Left"];
+    const csv = [headers.join(",")]
+      .concat(
+        contractRows.map((contract) =>
+          [contract.hospital, contract.contractNo, contract.contractStartDate, contract.contractEndDate, contract.daysLeft]
+            .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
+            .join(",")
+        )
+      )
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "pm-contracts-export.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportContractsToJson() {
+    const blob = new Blob([JSON.stringify(contractRows, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "pm-contracts-data.json";
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   function updateRow(id, patch, actor = "System") {
@@ -673,6 +752,9 @@ export default function App() {
           <button className={`button ${currentPage === "dashboard" ? "button-primary" : ""}`} onClick={() => setCurrentPage("dashboard")}>
             Dashboard
           </button>
+          <button className={`button ${currentPage === "hospital-status" ? "button-primary" : ""}`} onClick={openHospitalStatusView}>
+            Hospital Equipment Status
+          </button>
           <button className={`button ${currentPage === "contracts" ? "button-primary" : ""}`} onClick={openContractsView}>
             Contracts View
           </button>
@@ -700,24 +782,11 @@ export default function App() {
             hospital={selectedHospitalDetail}
             rows={hospitalDetailRows}
             getTrackingMeta={getTrackingMeta}
-            onBack={closeHospitalDetail}
+            onBack={() => setCurrentPage("hospital-status")}
             onSendHospitalEmail={handleNotifyEngineersQuickAction}
           />
-        ) : currentPage === "contracts" ? (
-          <ContractTrackerView contracts={contractRows} onBack={closeContractsView} />
-        ) : (
+        ) : currentPage === "hospital-status" ? (
           <div className="main-grid">
-            <EquipmentTable
-              rows={filteredRows}
-              getTrackingMeta={getTrackingMeta}
-              badgeClass={badgeClass}
-              updateRow={updateRow}
-              startEdit={startEdit}
-              handleDelete={handleDelete}
-              markComplete={markComplete}
-              onViewDetail={setDetailRow}
-            />
-
             <div className="side-grid">
               <div className="card">
                 <h2 className="section-title">Quick Actions</h2>
@@ -746,7 +815,39 @@ export default function App() {
                   {quickActionFeedback ? <div className="quick-action-feedback">{quickActionFeedback}</div> : null}
                 </div>
               </div>
+            </div>
 
+            <HospitalSummary
+              byHospital={byHospital}
+              selectedHospital={selectedHospitalDetail}
+              onSelectHospital={openHospitalDetail}
+              hospitalSummaryFilter={hospitalSummaryFilter}
+              onHospitalSummaryFilterChange={setHospitalSummaryFilter}
+            />
+          </div>
+        ) : currentPage === "contracts" ? (
+          <ContractTrackerView
+            contracts={contractRows}
+            onBack={closeContractsView}
+            contractFileInputRef={contractFileInputRef}
+            onImportContracts={handleImportContractsFile}
+            onExportContractsCsv={exportContractsToCsv}
+            onExportContractsJson={exportContractsToJson}
+          />
+        ) : (
+          <div className="main-grid">
+            <EquipmentTable
+              rows={filteredRows}
+              getTrackingMeta={getTrackingMeta}
+              badgeClass={badgeClass}
+              updateRow={updateRow}
+              startEdit={startEdit}
+              handleDelete={handleDelete}
+              markComplete={markComplete}
+              onViewDetail={setDetailRow}
+            />
+
+            <div className="side-grid">
               <HospitalSummary
                 byHospital={byHospital}
                 selectedHospital={selectedHospitalDetail}

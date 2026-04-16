@@ -7,7 +7,14 @@ function getContractTimingLabel(daysLeft) {
   return { label: `${daysLeft} day(s) remaining`, className: "badge badge-confirmed" };
 }
 
-export default function ContractTrackerView({ contracts, onBack }) {
+export default function ContractTrackerView({
+  contracts,
+  onBack,
+  contractFileInputRef,
+  onImportContracts,
+  onExportContractsCsv,
+  onExportContractsJson,
+}) {
   return (
     <div className="card contracts-view-card">
       <div className="detail-head">
@@ -21,6 +28,19 @@ export default function ContractTrackerView({ contracts, onBack }) {
         <button className="button" onClick={onBack}>
           <ArrowLeft size={15} className="inline-icon" />
           Back to dashboard
+        </button>
+      </div>
+
+      <div className="actions contracts-actions-row">
+        <input ref={contractFileInputRef} type="file" accept=".csv" className="hidden-input" onChange={onImportContracts} />
+        <button className="button" onClick={() => contractFileInputRef.current?.click()}>
+          Import Contracts CSV
+        </button>
+        <button className="button" onClick={onExportContractsCsv}>
+          Export Contracts CSV
+        </button>
+        <button className="button" onClick={onExportContractsJson}>
+          Export Contracts JSON
         </button>
       </div>
 
