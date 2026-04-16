@@ -1,17 +1,22 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Building2, Copy, Mail, MessageSquare } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { ArrowLeft, Bot, Building2, Copy, Mail, MessageSquare, Wrench } from "lucide-react";
 
-function buildEmailDraft(pendingRows, hospital) {
+function buildEmailDraft(pendingRows, hospital, useAiTone = false) {
   const subject = `Preventive Maintenance Follow-up - ${hospital} (${pendingRows.length} pending item${pendingRows.length === 1 ? "" : "s"})`;
   const equipmentLines = pendingRows.map(
     (row, index) =>
       `${index + 1}. ${row.equipment} | Model: ${row.model || "-"} | Serial: ${row.serial || "-"} | Dept: ${row.department || "-"} | Status: ${row.status || "Upcoming"} | Next PM: ${row.nextPmDate || "-"}`
   );
 
+  const aiLine = useAiTone
+    ? "Please use a concise, customer-friendly tone and keep the request action-oriented."
+    : "Please confirm availability so we can finalize the preventive maintenance schedule.";
+
   const body = [
     "Hello,",
     "",
     `This is a follow-up on pending preventive maintenance for ${hospital}.`,
+    aiLine,
     "",
     "Pending equipment and current status:",
     ...equipmentLines,
@@ -29,6 +34,36 @@ function buildEmailDraft(pendingRows, hospital) {
   return { subject, body };
 }
 
+function buildEngineerDispatchMessage(targetRows, hospital) {
+  const lines = targetRows.map(
+    (row, index) =>
+      `${index + 1}. ${row.equipment} (${row.serial || "No serial"}) - ${row.department || "No department"} - Next PM: ${row.nextPmDate || "N/A"} - Hospital Contact: ${row.contactEmail || "N/A"}`
+  );
+
+  return [
+    `Engineer dispatch list for ${hospital}`,
+    "",
+    "Please prepare and send the following PM items:",
+    ...lines,
+    "",
+    "Include parts/tools readiness and propose visit windows per item.",
+  ].join("\n");
+}
+
+function buildAiPrompt(emailDraft, hospital) {
+  return [
+    "Rewrite the following PM follow-up email for a hospital customer.",
+    "Tone: professional, clear, warm, and concise.",
+    "Keep all equipment details accurate and keep numbered action requests.",
+    `Hospital: ${hospital}`,
+    "",
+    "EMAIL TO REWRITE:",
+    `Subject: ${emailDraft.subject}`,
+    "",
+    emailDraft.body,
+  ].join("\n");
+}
+
 export default function HospitalDetailView({
   hospital,
   rows,
@@ -37,39 +72,43 @@ export default function HospitalDetailView({
   onSendHospitalEmail,
   onAddHospitalComment,
 }) {
-  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState([]);
+  const [selectedEquipmentId, setSelectedEquipmentId] = useState("all");
   const [copied, setCopied] = useState(false);
+  const [copiedAiPrompt, setCopiedAiPrompt] = useState(false);
+  const [copiedEngineerMessage, setCopiedEngineerMessage] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [commentBy, setCommentBy] = useState("PM Coordinator");
+  const [useAiTone, setUseAiTone] = useState(true);
 
-  useEffect(() => {
-    if (!rows.length) {
-      setSelectedEquipmentIds([]);
-      return;
-    }
+  const selectedRows = useMemo(() => {
+    if (selectedEquipmentId === "all") return rows;
+    return rows.filter((row) => String(row.id) === String(selectedEquipmentId));
+  }, [rows, selectedEquipmentId]);
 
-    setSelectedEquipmentIds((current) => current.filter((id) => rows.some((row) => String(row.id) === String(id))));
-  }, [rows]);
-
-  const selectedRows = useMemo(
-    () => rows.filter((row) => selectedEquipmentIds.includes(String(row.id))),
-    [rows, selectedEquipmentIds]
-  );
-  const rowsForEmail = selectedRows.length ? selectedRows : rows;
   const pendingRows = useMemo(
-    () => rowsForEmail.filter((row) => getTrackingMeta(row).effectiveStatus !== "Completed"),
-    [rowsForEmail, getTrackingMeta]
+    () => selectedRows.filter((row) => getTrackingMeta(row).effectiveStatus !== "Completed"),
+    [selectedRows, getTrackingMeta]
   );
-  const emailDraft = pendingRows.length ? buildEmailDraft(pendingRows, hospital) : null;
+
+  const selectedEquipment = useMemo(
+    () => rows.find((row) => String(row.id) === String(selectedEquipmentId)),
+    [rows, selectedEquipmentId]
+  );
+
+  const emailDraft = pendingRows.length ? buildEmailDraft(pendingRows, hospital, useAiTone) : null;
   const generatedEmailText = emailDraft ? `Subject: ${emailDraft.subject}\n\n${emailDraft.body}` : "";
   const canEmailSelected = pendingRows.length > 0;
   const selectedMailTo = canEmailSelected
-    ? `mailto:${Array.from(new Set(rowsForEmail.map((row) => row.contactEmail).filter(Boolean))).join(",")}?subject=${encodeURIComponent(emailDraft.subject)}&body=${encodeURIComponent(emailDraft.body)}`
+    ? `mailto:${Array.from(new Set(selectedRows.map((row) => row.contactEmail).filter(Boolean))).join(",")}?subject=${encodeURIComponent(emailDraft.subject)}&body=${encodeURIComponent(emailDraft.body)}`
     : "";
 
+  const engineerDispatchMessage = useMemo(
+    () => buildEngineerDispatchMessage(pendingRows, hospital),
+    [pendingRows, hospital]
+  );
+
   const communicationTimeline = useMemo(() => {
-    const targetRows = selectedRows.length ? selectedRows : rows;
-    return targetRows
+    return selectedRows
       .flatMap((row) => [
         ...(row.comments || []).map((item) => ({
           ...item,
@@ -91,24 +130,9 @@ export default function HospitalDetailView({
         })),
       ])
       .sort((a, b) => new Date(b.at || b.date || 0) - new Date(a.at || a.date || 0));
-  }, [rows, selectedRows]);
+  }, [selectedRows]);
 
   if (!hospital) return null;
-
-  function toggleSelection(rowId) {
-    const asString = String(rowId);
-    setSelectedEquipmentIds((current) =>
-      current.includes(asString) ? current.filter((id) => id !== asString) : [...current, asString]
-    );
-  }
-
-  function selectAll() {
-    setSelectedEquipmentIds(rows.map((row) => String(row.id)));
-  }
-
-  function clearSelection() {
-    setSelectedEquipmentIds([]);
-  }
 
   async function copyEmailDraft() {
     if (!generatedEmailText) return;
@@ -122,16 +146,45 @@ export default function HospitalDetailView({
     }
   }
 
+  async function copyAiPrompt() {
+    if (!emailDraft) return;
+
+    try {
+      await navigator.clipboard.writeText(buildAiPrompt(emailDraft, hospital));
+      setCopiedAiPrompt(true);
+      setTimeout(() => setCopiedAiPrompt(false), 1800);
+    } catch (error) {
+      console.error("Failed to copy AI prompt", error);
+    }
+  }
+
+  async function copyEngineerMessage() {
+    if (!engineerDispatchMessage.trim()) return;
+
+    try {
+      await navigator.clipboard.writeText(engineerDispatchMessage);
+      setCopiedEngineerMessage(true);
+      setTimeout(() => setCopiedEngineerMessage(false), 1800);
+    } catch (error) {
+      console.error("Failed to copy engineer dispatch message", error);
+    }
+  }
+
   function handleOpenEmailClient() {
     if (!canEmailSelected) return;
-    onSendHospitalEmail?.(rowsForEmail, emailDraft.subject);
+    onSendHospitalEmail?.(selectedRows, emailDraft.subject);
+  }
+
+  function handleNotifyEngineers() {
+    if (!pendingRows.length) return;
+    onSendHospitalEmail?.(pendingRows, "Engineer dispatch sent");
   }
 
   function handleAddComment(event) {
     event.preventDefault();
     if (!commentText.trim()) return;
     onAddHospitalComment?.({
-      rowIds: selectedRows.length ? selectedRows.map((row) => row.id) : rows.map((row) => row.id),
+      rowIds: selectedRows.map((row) => row.id),
       note: commentText.trim(),
       by: commentBy.trim() || "PM Coordinator",
     });
@@ -154,90 +207,70 @@ export default function HospitalDetailView({
         </button>
       </div>
 
-      <div className="hospital-quick-actions hospital-selection-actions">
+      <div className="hospital-quick-actions compact-quick-actions">
+        <div>
+          <label className="muted">Select equipment</label>
+          <select className="select" value={selectedEquipmentId} onChange={(event) => setSelectedEquipmentId(event.target.value)}>
+            <option value="all">All equipment ({rows.length})</option>
+            {rows.map((row) => (
+              <option key={row.id} value={String(row.id)}>
+                {row.equipment} {row.serial ? `(${row.serial})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="selection-meta">
-          {selectedRows.length} selected
-          {selectedRows.length ? "" : " (select equipment below)"}
+          {selectedRows.length} selected · {pendingRows.length} pending
         </div>
 
         <div className="selection-buttons">
-          <button className="button" onClick={selectAll} disabled={!rows.length}>
-            Select all
+          <button className="button" onClick={copyEngineerMessage} disabled={!pendingRows.length}>
+            <Wrench size={15} className="inline-icon" />
+            {copiedEngineerMessage ? "Engineer list copied" : "Copy engineer list"}
           </button>
-          <button className="button" onClick={clearSelection} disabled={!selectedRows.length}>
-            Clear
+          <button className="button" onClick={handleNotifyEngineers} disabled={!pendingRows.length}>
+            Notify engineers
           </button>
+          {canEmailSelected ? (
+            <a className="button button-primary" href={selectedMailTo} onClick={handleOpenEmailClient}>
+              <Mail size={15} className="inline-icon" />
+              Open email client
+            </a>
+          ) : (
+            <button className="button" disabled title="No pending equipment to include.">
+              <Mail size={15} className="inline-icon" />
+              Open email client
+            </button>
+          )}
         </div>
-
-        {canEmailSelected ? (
-          <a className="button button-primary" href={selectedMailTo} onClick={handleOpenEmailClient}>
-            <Mail size={15} className="inline-icon" />
-            Open email client
-          </a>
-        ) : (
-          <button className="button" disabled title="No pending equipment to include.">
-            <Mail size={15} className="inline-icon" />
-            Open email client
-          </button>
-        )}
       </div>
+
       <div className="email-draft-wrap">
         <div className="email-draft-head">
-          <div className="selection-meta">
-            Ready-to-copy email draft ({pendingRows.length} pending item{pendingRows.length === 1 ? "" : "s"})
+          <div className="selection-meta">Email reminder draft ({pendingRows.length} pending item{pendingRows.length === 1 ? "" : "s"})</div>
+          <div className="selection-buttons">
+            <label className="muted ai-toggle-wrap">
+              <input type="checkbox" checked={useAiTone} onChange={(event) => setUseAiTone(event.target.checked)} /> AI-friendly tone
+            </label>
+            <button className="button" onClick={copyAiPrompt} disabled={!generatedEmailText}>
+              <Bot size={15} className="inline-icon" />
+              {copiedAiPrompt ? "AI prompt copied" : "Copy AI prompt"}
+            </button>
+            <button className="button" onClick={copyEmailDraft} disabled={!generatedEmailText}>
+              <Copy size={15} className="inline-icon" />
+              {copied ? "Copied" : "Copy email text"}
+            </button>
           </div>
-          <button className="button" onClick={copyEmailDraft} disabled={!generatedEmailText}>
-            <Copy size={15} className="inline-icon" />
-            {copied ? "Copied" : "Copy email text"}
-          </button>
         </div>
         <textarea
           className="input textarea email-draft-textarea"
           readOnly
           value={
             generatedEmailText ||
-            "Select equipment or keep all selected by default to generate a draft email for pending preventive maintenance."
+            "Select equipment (or All) to generate an email reminder draft for pending preventive maintenance items."
           }
         />
-      </div>
-
-      <form className="comment-form" onSubmit={handleAddComment}>
-        <div className="comment-form-head">
-          <div className="selection-meta">
-            <MessageSquare size={14} className="inline-icon" />
-            Communication notes
-          </div>
-          <input
-            className="input"
-            value={commentBy}
-            onChange={(event) => setCommentBy(event.target.value)}
-            placeholder="Added by"
-          />
-        </div>
-        <textarea
-          className="input textarea"
-          value={commentText}
-          onChange={(event) => setCommentText(event.target.value)}
-          placeholder="Add a comment or follow-up note. It will be stored in selected equipment COM history."
-        />
-        <button className="button" type="submit">Add comment to history</button>
-      </form>
-
-      <div className="com-history-wrap">
-        <h3 className="section-title hospital-subsection-title">COM History (comments, notes, emails)</h3>
-        {communicationTimeline.length ? (
-          <div className="history-list">
-            {communicationTimeline.slice(0, 40).map((entry, idx) => (
-              <div key={`${entry.type}-${entry.at || entry.date}-${idx}`} className="history-item">
-                <div className="strong">{entry.type.toUpperCase()} · {entry.equipment || "General"}</div>
-                <div className="muted">{entry.serial || "No serial"} · {entry.by || entry.updatedBy || "System"} · {entry.at || entry.date || "Unknown date"}</div>
-                <div>{entry.note || entry.notes || entry.subject || "No details"}</div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="muted">No communication history yet for this hospital.</div>
-        )}
       </div>
 
       <div className="hospital-status-view">
@@ -246,7 +279,6 @@ export default function HospitalDetailView({
           <table className="table">
             <thead>
               <tr>
-                <th>Select</th>
                 <th>Equipment</th>
                 <th>Department</th>
                 <th>Next PM</th>
@@ -255,15 +287,11 @@ export default function HospitalDetailView({
               </tr>
             </thead>
             <tbody>
-              {rows.length ? (
-                rows.map((row) => {
+              {selectedRows.length ? (
+                selectedRows.map((row) => {
                   const meta = getTrackingMeta(row);
-                  const isSelected = selectedEquipmentIds.includes(String(row.id));
                   return (
-                    <tr key={row.id} className={isSelected ? "hospital-status-row-selected" : ""}>
-                      <td>
-                        <input type="checkbox" checked={isSelected} onChange={() => toggleSelection(row.id)} aria-label={`Select ${row.equipment}`} />
-                      </td>
+                    <tr key={row.id} className={selectedEquipmentId !== "all" ? "hospital-status-row-selected" : ""}>
                       <td>
                         <div className="strong">{row.equipment}</div>
                         <div className="muted">{row.serial || "No serial"}</div>
@@ -285,7 +313,7 @@ export default function HospitalDetailView({
                 })
               ) : (
                 <tr>
-                  <td colSpan={6} className="muted">
+                  <td colSpan={5} className="muted">
                     No equipment found for this hospital.
                   </td>
                 </tr>
@@ -293,6 +321,40 @@ export default function HospitalDetailView({
             </tbody>
           </table>
         </div>
+      </div>
+
+      <form className="comment-form" onSubmit={handleAddComment}>
+        <div className="comment-form-head">
+          <div className="selection-meta">
+            <MessageSquare size={14} className="inline-icon" />
+            Notes for {selectedEquipment ? selectedEquipment.equipment : "all selected equipment"}
+          </div>
+          <input className="input" value={commentBy} onChange={(event) => setCommentBy(event.target.value)} placeholder="Added by" />
+        </div>
+        <textarea
+          className="input textarea"
+          value={commentText}
+          onChange={(event) => setCommentText(event.target.value)}
+          placeholder="Add a follow-up note. It will be saved in the selected equipment communication history."
+        />
+        <button className="button" type="submit">Add note to history</button>
+      </form>
+
+      <div className="com-history-wrap">
+        <h3 className="section-title hospital-subsection-title">COM History (selected view)</h3>
+        {communicationTimeline.length ? (
+          <div className="history-list">
+            {communicationTimeline.slice(0, 40).map((entry, idx) => (
+              <div key={`${entry.type}-${entry.at || entry.date}-${idx}`} className="history-item">
+                <div className="strong">{entry.type.toUpperCase()} · {entry.equipment || "General"}</div>
+                <div className="muted">{entry.serial || "No serial"} · {entry.by || entry.updatedBy || "System"} · {entry.at || entry.date || "Unknown date"}</div>
+                <div>{entry.note || entry.notes || entry.subject || "No details"}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="muted">No communication history yet for this selection.</div>
+        )}
       </div>
     </div>
   );
