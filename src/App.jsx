@@ -100,6 +100,38 @@ function getOverdueStatus(dateStr, status) {
   return getDaysUntil(dateStr) < 0 ? "Overdue" : "On Track";
 }
 
+function parseCsvLine(line) {
+  const values = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    const next = line[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      values.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  values.push(current.trim());
+  return values;
+}
+
 function normalizeImportedRows(rawRows) {
   return rawRows
     .map((row, index) => {
@@ -233,9 +265,9 @@ export default function App() {
     const lines = text.split(/\r?\n/).filter(Boolean);
     if (lines.length < 2) return;
 
-    const headers = lines[0].split(",").map((h) => h.trim());
+    const headers = parseCsvLine(lines[0]).map((h) => h.replace(/^\uFEFF/, "").trim());
     const rawRows = lines.slice(1).map((line) => {
-      const values = line.split(",");
+      const values = parseCsvLine(line);
       const obj = {};
       headers.forEach((header, i) => {
         obj[header] = (values[i] || "").trim();
