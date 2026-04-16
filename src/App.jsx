@@ -135,6 +135,7 @@ export default function App() {
   const [equipmentForm, setEquipmentForm] = useState(defaultEquipmentForm);
   const [detailRow, setDetailRow] = useState(null);
   const [selectedHospitalDetail, setSelectedHospitalDetail] = useState(null);
+  const [currentPage, setCurrentPage] = useState("dashboard");
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -250,6 +251,16 @@ export default function App() {
     () => rows.filter((row) => row.hospital === selectedHospitalDetail),
     [rows, selectedHospitalDetail]
   );
+
+  function openHospitalDetail(hospital) {
+    setSelectedHospitalDetail(hospital);
+    setCurrentPage("hospital-detail");
+  }
+
+  function closeHospitalDetail() {
+    setCurrentPage("dashboard");
+    setSelectedHospitalDetail(null);
+  }
 
   async function handleImportFile(event) {
     const file = event.target.files?.[0];
@@ -491,53 +502,49 @@ export default function App() {
           statuses={statuses}
         />
 
-        {selectedHospitalDetail ? (
+        {currentPage === "hospital-detail" ? (
           <HospitalDetailView
             hospital={selectedHospitalDetail}
             rows={hospitalDetailRows}
             getTrackingMeta={getTrackingMeta}
-            onClose={() => setSelectedHospitalDetail(null)}
+            onBack={closeHospitalDetail}
           />
-        ) : null}
-
-        <div className="main-grid">
-          <EquipmentTable
-            rows={filteredRows}
-            getTrackingMeta={getTrackingMeta}
-            badgeClass={badgeClass}
-            updateRow={updateRow}
-            startEdit={startEdit}
-            handleDelete={handleDelete}
-            markComplete={markComplete}
-            onViewDetail={setDetailRow}
-          />
-
-          <div className="side-grid">
-            <div className="card">
-              <h2 className="section-title">Quick Actions</h2>
-              <div className="side-actions">
-                <button className="button">
-                  <Bell size={16} className="inline-icon" />
-                  Send Upcoming PM Reminders
-                </button>
-                <button className="button">
-                  <Wrench size={16} className="inline-icon" />
-                  Notify Engineers
-                </button>
-                <button className="button">
-                  <AlertTriangle size={16} className="inline-icon" />
-                  View Overdue Equipment
-                </button>
-              </div>
-            </div>
-
-            <HospitalSummary
-              byHospital={byHospital}
-              selectedHospital={selectedHospitalDetail}
-              onSelectHospital={setSelectedHospitalDetail}
+        ) : (
+          <div className="main-grid">
+            <EquipmentTable
+              rows={filteredRows}
+              getTrackingMeta={getTrackingMeta}
+              badgeClass={badgeClass}
+              updateRow={updateRow}
+              startEdit={startEdit}
+              handleDelete={handleDelete}
+              markComplete={markComplete}
+              onViewDetail={setDetailRow}
             />
+
+            <div className="side-grid">
+              <div className="card">
+                <h2 className="section-title">Quick Actions</h2>
+                <div className="side-actions">
+                  <button className="button">
+                    <Bell size={16} className="inline-icon" />
+                    Send Upcoming PM Reminders
+                  </button>
+                  <button className="button">
+                    <Wrench size={16} className="inline-icon" />
+                    Notify Engineers
+                  </button>
+                  <button className="button">
+                    <AlertTriangle size={16} className="inline-icon" />
+                    View Overdue Equipment
+                  </button>
+                </div>
+              </div>
+
+              <HospitalSummary byHospital={byHospital} selectedHospital={selectedHospitalDetail} onSelectHospital={openHospitalDetail} />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <EquipmentDetailModal row={detailRow} onClose={() => setDetailRow(null)} />
