@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
+import { loadRowsWithFallback, persistRows } from "./storage";
 import {
   AlertTriangle,
   Bell,
@@ -244,10 +245,8 @@ export default function App() {
     notes: "",
   };
 
-  const [rows, setRows] = useState(() => {
-    const saved = localStorage.getItem("pm-tracker-rows");
-    const parsed = saved ? JSON.parse(saved) : initialData;
-    return parsed.map((row) => ({
+  const normalizeRows = (sourceRows) =>
+    sourceRows.map((row) => ({
       ...row,
       department: row.department || "",
       notes: row.notes || "",
@@ -255,7 +254,9 @@ export default function App() {
       lastPmDate: row.lastPmDate || "",
       completionDate: row.completionDate || "",
     }));
-  });
+
+  const [rows, setRows] = useState(() => normalizeRows(initialData));
+  const [storageReady, setStorageReady] = useState(false);
 
   const [search, setSearch] = useState("");
   const [hospitalFilter, setHospitalFilter] = useState("All");
@@ -268,8 +269,28 @@ export default function App() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    localStorage.setItem("pm-tracker-rows", JSON.stringify(rows));
-  }, [rows]);
+    let cancelled = false;
+
+    (async () => {
+      const loadedRows = await loadRowsWithFallback(initialData);
+      if (!cancelled) {
+        setRows(normalizeRows(loadedRows));
+        setStorageReady(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+
+    persistRows(rows).catch((error) => {
+      console.error("Failed to persist PM tracker rows", error);
+    });
+  }, [rows, storageReady]);
 
   const hospitals = useMemo(() => {
     const unique = Array.from(new Set(rows.map((r) => r.hospital).filter(Boolean)));
@@ -525,6 +546,49 @@ export default function App() {
     resetForm();
   }
 
+
+  async function runStorageStressTest() {
+    const originalRows = rows;
+    const largeRows = Array.from({ length: 2500 }, (_, index) => ({
+      id: Date.now() + index,
+      hospital: `Stress Test Hospital ${index}`,
+      contractNo: `ST/${index}`,
+      equipment: `Stress Equipment ${index}`,
+      model: `Model-${index}`,
+      serial: `SERIAL-${index}`,
+      pmsPerYear: 2,
+      nextPmDate: "2026-12-31",
+      department: "Test",
+      notes: "IndexedDB large payload test",
+      reminderDates: "2026-10-01, 2026-10-08",
+      lastPmDate: "2026-08-01",
+      completionDate: "",
+      status: "Upcoming",
+      engineer: "QA",
+      contactEmail: "qa@example.com",
+      reminder1Sent: false,
+      reminder2Sent: false,
+      engineerAlertSent: false,
+    }));
+
+    try {
+      await persistRows(largeRows);
+      const reloaded = await loadRowsWithFallback([]);
+      const passed = reloaded.length === largeRows.length && reloaded[2499]?.serial === "SERIAL-2499";
+
+      if (!passed) {
+        throw new Error("Stored rows did not match after reload");
+      }
+
+      alert("IndexedDB stress test passed: 2500 rows saved and reloaded.");
+    } catch (error) {
+      alert(`IndexedDB stress test failed: ${error.message}`);
+    } finally {
+      await persistRows(originalRows);
+      setRows(originalRows);
+    }
+  }
+
   function badgeClass(status, overdueStatus) {
     if (status === "Completed") return "badge badge-completed";
     if (overdueStatus === "Overdue") return "badge badge-overdue";
@@ -539,7 +603,7 @@ export default function App() {
           <div>
             <h1 className="page-title">Preventive Maintenance Tracker</h1>
             <p className="subtitle">
-              Local PM dashboard with CSV import/export and reminder tracking.
+              Local PM dashboard using IndexedDB with local backup + CSV/JSON exports.
             </p>
           </div>
 
@@ -909,6 +973,9 @@ export default function App() {
                 <button className="button">
                   <AlertTriangle size={16} className="inline-icon" />
                   View Overdue Equipment
+                </button>
+                <button className="button" onClick={runStorageStressTest}>
+                  Run IndexedDB Stress Test
                 </button>
               </div>
             </div>
