@@ -50,6 +50,52 @@ export function parseCsvText(text) {
   });
 }
 
+export async function parseImportFile(file) {
+  const extension = (file.name.split(".").pop() || "").toLowerCase();
+  const text = await file.text();
+
+  if (extension === "csv") return parseCsvText(text);
+
+  if (["xlsx", "xls"].includes(extension)) {
+    const trimmed = text.trim();
+    if (!trimmed) return [];
+
+    // Browser-local fallback for tab-delimited or SpreadsheetML text exports.
+    if (trimmed.includes("\t") && trimmed.includes("\n")) {
+      const lines = trimmed.split(/\r?\n/).filter(Boolean);
+      const headers = lines[0].split("\t").map((item) => item.trim());
+      return lines.slice(1).map((line) => {
+        const values = line.split("\t");
+        const row = {};
+        headers.forEach((header, index) => {
+          row[header] = (values[index] || "").trim();
+        });
+        return row;
+      });
+    }
+
+    if (trimmed.startsWith("<?xml") || trimmed.includes("<Workbook")) {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(trimmed, "text/xml");
+      const rows = Array.from(xml.querySelectorAll("Row"));
+      if (!rows.length) return [];
+      const headers = Array.from(rows[0].querySelectorAll("Cell Data")).map((cell) => cell.textContent?.trim() || "");
+      return rows.slice(1).map((xmlRow) => {
+        const cells = Array.from(xmlRow.querySelectorAll("Cell Data")).map((cell) => cell.textContent?.trim() || "");
+        const row = {};
+        headers.forEach((header, index) => {
+          row[header] = cells[index] || "";
+        });
+        return row;
+      });
+    }
+
+    throw new Error("Excel binary files are supported in desktop mode. In browser mode, save as CSV and import.");
+  }
+
+  return [];
+}
+
 export function normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate) {
   return rawRows
     .map((row, index) => {
@@ -109,6 +155,8 @@ export function normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate)
         updatedDate,
         updatedBy,
         pmHistory: [],
+        comments: [],
+        emailHistory: [],
       };
     })
     .filter(Boolean);

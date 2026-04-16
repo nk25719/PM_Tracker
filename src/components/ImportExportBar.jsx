@@ -4,9 +4,9 @@ import { Plus } from "lucide-react";
 export default function ImportExportBar({ fileInputRef, onImportChange, onExportCsv, onExportJson, onStartAdd }) {
   return (
     <div className="actions">
-      <input ref={fileInputRef} type="file" accept=".csv" className="hidden-input" onChange={onImportChange} />
+      <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden-input" onChange={onImportChange} />
       <button className="button" onClick={() => fileInputRef.current?.click()}>
-        Import CSV
+        Import CSV/Excel
       </button>
       <button className="button" onClick={onExportCsv}>
         Export CSV

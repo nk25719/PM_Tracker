@@ -61,6 +61,8 @@ export function normalizeRows(rows) {
     reminder2Sent: Boolean(row.reminder2Sent),
     engineerAlertSent: Boolean(row.engineerAlertSent),
     status: normalizeStatus(row.status || "Upcoming"),
+    comments: Array.isArray(row.comments) ? row.comments : [],
+    emailHistory: Array.isArray(row.emailHistory) ? row.emailHistory : [],
   }));
 }
 
