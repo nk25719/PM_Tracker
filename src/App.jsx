@@ -487,20 +487,22 @@ export default function App() {
 
         <DashboardCards metrics={metrics} />
 
-        <FiltersBar
-          search={search}
-          setSearch={setSearch}
-          hospitalFilter={hospitalFilter}
-          setHospitalFilter={setHospitalFilter}
-          statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
-          timingFilter={timingFilter}
-          setTimingFilter={setTimingFilter}
-          sortBy={sortBy}
-          setSortBy={setSortBy}
-          hospitals={hospitals}
-          statuses={statuses}
-        />
+        {currentPage !== "hospital-detail" ? (
+          <FiltersBar
+            search={search}
+            setSearch={setSearch}
+            hospitalFilter={hospitalFilter}
+            setHospitalFilter={setHospitalFilter}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            timingFilter={timingFilter}
+            setTimingFilter={setTimingFilter}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            hospitals={hospitals}
+            statuses={statuses}
+          />
+        ) : null}
 
         {currentPage === "hospital-detail" ? (
           <HospitalDetailView
