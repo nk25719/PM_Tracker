@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
-import { AlertTriangle, Bell } from "lucide-react";
 import { loadRowsFromStorage, saveRowsToStorage } from "./storage";
 import DashboardCards from "./components/DashboardCards";
 import EquipmentTable from "./components/EquipmentTable";
@@ -1035,52 +1034,6 @@ export default function App() {
         onSelectHospital={openHospitalDetail}
         hospitalSummaryFilter={hospitalSummaryFilter}
         onHospitalSummaryFilterChange={setHospitalSummaryFilter}
-        quickActions={
-          <div className="side-actions">
-            <h3 className="section-title">Quick Actions</h3>
-            <div className="quick-action-block">
-              <label className="muted">Reminder window</label>
-              <select className="select" value={reminderWindow} onChange={(event) => setReminderWindow(event.target.value)}>
-                <option value="next-week">Next week</option>
-                <option value="next-month">Next month</option>
-              </select>
-              <label className="muted">Send at (date/time)</label>
-              <input className="input" type="datetime-local" value={reminderScheduleAt} onChange={(event) => setReminderScheduleAt(event.target.value)} />
-            </div>
-            <button className="button" onClick={handleUpcomingReminderAction}>
-              <Bell size={16} className="inline-icon" />
-              Send Upcoming PM Reminders
-            </button>
-            <button className="button" onClick={showOverdueQuickAction}>
-              <AlertTriangle size={16} className="inline-icon" />
-              View Overdue Equipment
-            </button>
-            <button className="button" onClick={markOverdueReminderOneSent}>
-              Mark Overdue R1 as Sent
-            </button>
-            <button className="button" onClick={markOverdueReminderTwoSent}>
-              Mark Overdue R2 as Sent
-            </button>
-            <button className="button" onClick={markOverdueEngineerAlertSent}>
-              Mark Overdue Alerts as Sent
-            </button>
-            <div className="quick-action-block ai-insight-card">
-              <div className="strong">AI Recommendations</div>
-              <div className="muted">
-                {aiInsights.riskiestHospital
-                  ? `${aiInsights.riskiestHospital[0]} has the highest overdue load (${aiInsights.riskiestHospital[1]}).`
-                  : "No overdue risk hotspots right now."}
-              </div>
-              <div className="muted">
-                {aiInsights.soonRows.length} equipment item(s) are due in 7 days. Prioritize engineer dispatch now.
-              </div>
-              <button className="button button-soft" onClick={() => handleNotifyEngineersQuickAction(aiInsights.soonRows, "AI suggested due-soon dispatch")}>
-                Send AI-Suggested Dispatch
-              </button>
-            </div>
-            {quickActionFeedback ? <div className="quick-action-feedback">{quickActionFeedback}</div> : null}
-          </div>
-        }
       />
     );
   }
@@ -1290,6 +1243,7 @@ export default function App() {
             onBack={() => setCurrentPage("hospital-status")}
             onSendHospitalEmail={handleHospitalEmailQuickAction}
             onAddHospitalComment={handleAddHospitalComment}
+            quickActionFeedback={quickActionFeedback}
           />
         ) : currentPage === "hospital-status" ? (
           renderHospitalSummaryPanel()
