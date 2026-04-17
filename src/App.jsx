@@ -998,6 +998,44 @@ export default function App() {
     setQuickActionFeedback("Showing overdue equipment in the main table.");
   }
 
+  function applyStatusQuickAction({ label, matcher, patch }) {
+    const targetRows = rows.filter(matcher);
+    if (!targetRows.length) {
+      setQuickActionFeedback(`No equipment matched for "${label}".`);
+      return;
+    }
+
+    const targetIds = new Set(targetRows.map((row) => row.id));
+    setRows((prevRows) =>
+      prevRows.map((row) => (targetIds.has(row.id) ? { ...row, ...patch } : row))
+    );
+    setQuickActionFeedback(`${label} applied to ${targetRows.length} equipment item(s).`);
+  }
+
+  function markOverdueReminderOneSent() {
+    applyStatusQuickAction({
+      label: "Reminder 1 marked as sent for overdue equipment",
+      matcher: (row) => getTrackingMeta(row).isOverdue && !row.reminder1Sent,
+      patch: { reminder1Sent: true },
+    });
+  }
+
+  function markOverdueReminderTwoSent() {
+    applyStatusQuickAction({
+      label: "Reminder 2 marked as sent for overdue equipment",
+      matcher: (row) => getTrackingMeta(row).isOverdue && !row.reminder2Sent,
+      patch: { reminder2Sent: true },
+    });
+  }
+
+  function markOverdueEngineerAlertSent() {
+    applyStatusQuickAction({
+      label: "Engineer alert marked as sent for overdue equipment",
+      matcher: (row) => getTrackingMeta(row).isOverdue && !row.engineerAlertSent,
+      patch: { engineerAlertSent: true },
+    });
+  }
+
   function handleMetricFilterSelect(nextTimingFilter) {
     setTimingFilter(nextTimingFilter);
     setCurrentPage("dashboard");
@@ -1183,6 +1221,15 @@ export default function App() {
                     <AlertTriangle size={16} className="inline-icon" />
                     View Overdue Equipment
                   </button>
+                  <button className="button" onClick={markOverdueReminderOneSent}>
+                    Mark Overdue R1 as Sent
+                  </button>
+                  <button className="button" onClick={markOverdueReminderTwoSent}>
+                    Mark Overdue R2 as Sent
+                  </button>
+                  <button className="button" onClick={markOverdueEngineerAlertSent}>
+                    Mark Overdue Alerts as Sent
+                  </button>
                   <div className="quick-action-block ai-insight-card">
                     <div className="strong">AI Recommendations</div>
                     <div className="muted">
@@ -1223,11 +1270,6 @@ export default function App() {
             rows={filteredRows}
             getTrackingMeta={getTrackingMeta}
             badgeClass={badgeClass}
-            updateRow={updateRow}
-            startEdit={startEdit}
-            handleDelete={handleDelete}
-            markComplete={markComplete}
-            onViewDetail={setDetailRow}
             getPmSlotStatus={getPmSlotStatus}
           />
         )}
