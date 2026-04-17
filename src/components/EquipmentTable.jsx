@@ -1,15 +1,9 @@
 import React from "react";
-import { Eye, Pencil, Trash2 } from "lucide-react";
 
 export default function EquipmentTable({
   rows,
   getTrackingMeta,
   badgeClass,
-  updateRow,
-  startEdit,
-  handleDelete,
-  markComplete,
-  onViewDetail,
   getPmSlotStatus,
 }) {
   return (
@@ -34,7 +28,6 @@ export default function EquipmentTable({
               <th>Reminders</th>
               <th>Due-soon Flags</th>
               <th>Status</th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -79,39 +72,6 @@ export default function EquipmentTable({
                   </td>
                   <td>
                     <span className={badgeClass(row.status, meta)}>{meta.effectiveStatus}</span>
-                  </td>
-                  <td>
-                    <div className="row-actions">
-                      <button className="button" onClick={() => updateRow(row.id, { reminder1Sent: !row.reminder1Sent })}>
-                        R1: {row.reminder1Sent ? "Sent" : "Pending"}
-                      </button>
-                      <button className="button" onClick={() => updateRow(row.id, { reminder2Sent: !row.reminder2Sent })}>
-                        R2: {row.reminder2Sent ? "Sent" : "Pending"}
-                      </button>
-                      <button
-                        className="button"
-                        onClick={() => updateRow(row.id, { engineerAlertSent: !row.engineerAlertSent })}
-                      >
-                        Alert: {row.engineerAlertSent ? "Sent" : "Pending"}
-                      </button>
-                      <button className="button" onClick={() => markComplete(row)}>
-                        Complete
-                      </button>
-                      <button className="button" onClick={() => onViewDetail(row)}>
-                        <Eye size={14} className="inline-icon" />
-                        View
-                      </button>
-                      <button className="button" onClick={() => startEdit(row)}>
-                        <Pencil size={14} className="inline-icon" />
-                        Edit
-                      </button>
-                      <button className="button danger" onClick={() => handleDelete(row.id)}>
-                        <Trash2 size={14} className="inline-icon" />
-                        Delete
-                      </button>
-                    </div>
-                    {row.reminderDates ? <div className="muted action-note">Reminder dates: {row.reminderDates}</div> : null}
-                    {row.notes ? <div className="muted action-note">Notes: {row.notes}</div> : null}
                   </td>
                 </tr>
               );
