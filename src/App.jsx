@@ -939,15 +939,18 @@ export default function App() {
     setQuickActionFeedback(`Engineers notified for ${actionableRows.length} equipment item(s).`);
   }
 
-  function handleHospitalEmailQuickAction(targetRows = [], subject = "PM follow-up email") {
-    const actionableRows = targetRows.filter((row) => getTrackingMeta(row).effectiveStatus !== "Completed");
+  function handleHospitalEmailQuickAction(targetRows = [], subject = "PM follow-up email", options = {}) {
+    const { includeCompleted = false } = options;
+    const actionableRows = targetRows.filter((row) =>
+      includeCompleted ? getTrackingMeta(row).effectiveStatus === "Completed" : getTrackingMeta(row).effectiveStatus !== "Completed"
+    );
     if (!actionableRows.length) {
-      setQuickActionFeedback("No pending PM items found for email follow-up.");
+      setQuickActionFeedback(includeCompleted ? "No completed PM items found for email follow-up." : "No pending PM items found for email follow-up.");
       return;
     }
 
     const targetIds = new Set(actionableRows.map((row) => row.id));
-    const stageCounts = { r1: 0, r2: 0, alert: 0, noChange: 0 };
+    const stageCounts = { r1: 0, r2: 0, alert: 0, completed: 0, noChange: 0 };
 
     setRows((current) =>
       current.map((row) => {
@@ -958,7 +961,9 @@ export default function App() {
           updatedDate: getTodayIsoDate(),
         };
 
-        if (!row.reminder1Sent) {
+        if (includeCompleted) {
+          stageCounts.completed += 1;
+        } else if (!row.reminder1Sent) {
           patch.reminder1Sent = true;
           if (row.status === "Upcoming") patch.status = "Hospital notified";
           stageCounts.r1 += 1;
@@ -982,6 +987,7 @@ export default function App() {
     if (stageCounts.r1) feedbackParts.push(`R1 sent for ${stageCounts.r1}`);
     if (stageCounts.r2) feedbackParts.push(`R2 sent for ${stageCounts.r2}`);
     if (stageCounts.alert) feedbackParts.push(`Engineer alert sent for ${stageCounts.alert}`);
+    if (stageCounts.completed) feedbackParts.push(`Completed PM email sent for ${stageCounts.completed}`);
     if (stageCounts.noChange) feedbackParts.push(`${stageCounts.noChange} already fully updated`);
     setQuickActionFeedback(`Email follow-up updated ${actionableRows.length} item(s): ${feedbackParts.join(" · ")}.`);
   }
