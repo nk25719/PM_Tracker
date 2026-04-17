@@ -213,6 +213,7 @@ export default function App() {
   const [detailRow, setDetailRow] = useState(null);
   const [selectedHospitalDetail, setSelectedHospitalDetail] = useState(null);
   const [selectedContractId, setSelectedContractId] = useState(null);
+  const [showContractAddEquipment, setShowContractAddEquipment] = useState(false);
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [hospitalSummaryFilter, setHospitalSummaryFilter] = useState("All");
   const [bulkEquipmentText, setBulkEquipmentText] = useState("");
@@ -444,6 +445,7 @@ export default function App() {
   function closeContractsView() {
     setCurrentPage("dashboard");
     setSelectedContractId(null);
+    setShowContractAddEquipment(false);
   }
 
   function openContractDetail(contractId) {
@@ -683,21 +685,28 @@ export default function App() {
     setEquipmentForm(createDefaultEquipmentForm());
     setBulkEquipmentText("");
     setEditingId(null);
-    setCurrentPage("dashboard");
+    setShowContractAddEquipment(false);
   }
 
   function startAdd() {
     setEquipmentForm(createDefaultEquipmentForm());
     setBulkEquipmentText("");
     setEditingId(null);
-    setCurrentPage("add-equipment");
+    setCurrentPage("contracts");
+    setShowContractAddEquipment(true);
   }
 
   function startEdit(row) {
     setEquipmentForm(createEquipmentFormFromRow(row));
     setBulkEquipmentText("");
     setEditingId(row.id);
-    setCurrentPage("add-equipment");
+    setCurrentPage("contracts");
+    setShowContractAddEquipment(true);
+  }
+
+  function toggleContractAddEquipment() {
+    setShowContractAddEquipment((current) => !current);
+    setCurrentPage("contracts");
   }
 
   function handleDelete(id) {
@@ -1124,9 +1133,7 @@ export default function App() {
           />
         </div>
 
-        {currentPage !== "add-equipment" ? (
-          <DashboardCards metrics={metrics} timingFilter={timingFilter} onMetricFilterSelect={handleMetricFilterSelect} />
-        ) : null}
+        <DashboardCards metrics={metrics} timingFilter={timingFilter} onMetricFilterSelect={handleMetricFilterSelect} />
         <div className="view-toggle-row">
           <button className={`button ${currentPage === "dashboard" ? "button-primary" : ""}`} onClick={() => setCurrentPage("dashboard")}>
             Dashboard
@@ -1137,7 +1144,7 @@ export default function App() {
           <button className={`button ${currentPage === "contracts" ? "button-primary" : ""}`} onClick={openContractsView}>
             Contracts View
           </button>
-          <button className={`button ${currentPage === "add-equipment" ? "button-primary" : ""}`} onClick={startAdd}>
+          <button className={`button ${currentPage === "contracts" && showContractAddEquipment ? "button-primary" : ""}`} onClick={startAdd}>
             Add Equipment
           </button>
         </div>
@@ -1159,7 +1166,29 @@ export default function App() {
           />
         ) : null}
 
-        {currentPage === "add-equipment" ? (
+        {currentPage === "hospital-detail" ? (
+          <HospitalDetailView
+            hospital={selectedHospitalDetail}
+            rows={hospitalDetailRows}
+            getTrackingMeta={getTrackingMeta}
+            onBack={() => setCurrentPage("hospital-status")}
+            onSendHospitalEmail={handleHospitalEmailQuickAction}
+            onAddHospitalComment={handleAddHospitalComment}
+            quickActionFeedback={quickActionFeedback}
+          />
+        ) : currentPage === "hospital-status" ? (
+          renderHospitalSummaryPanel()
+        ) : currentPage === "contracts" ? (
+          <ContractTrackerView
+            contracts={contractRows}
+            onBack={closeContractsView}
+            onOpenContract={openContractDetail}
+            contractFileInputRef={contractFileInputRef}
+            onImportContracts={handleImportContractsFile}
+            onExportContractsCsv={exportContractsToCsv}
+            isAddEquipmentVisible={showContractAddEquipment}
+            onToggleAddEquipment={toggleContractAddEquipment}
+            addEquipmentPanel={
           <div className="card form-card">
             <div className="form-head">
               <h2 className="section-title">{editingId ? "Edit Equipment" : "Add Equipment"}</h2>
@@ -1241,26 +1270,7 @@ export default function App() {
               </button>
             </form>
           </div>
-        ) : currentPage === "hospital-detail" ? (
-          <HospitalDetailView
-            hospital={selectedHospitalDetail}
-            rows={hospitalDetailRows}
-            getTrackingMeta={getTrackingMeta}
-            onBack={() => setCurrentPage("hospital-status")}
-            onSendHospitalEmail={handleHospitalEmailQuickAction}
-            onAddHospitalComment={handleAddHospitalComment}
-            quickActionFeedback={quickActionFeedback}
-          />
-        ) : currentPage === "hospital-status" ? (
-          renderHospitalSummaryPanel()
-        ) : currentPage === "contracts" ? (
-          <ContractTrackerView
-            contracts={contractRows}
-            onBack={closeContractsView}
-            onOpenContract={openContractDetail}
-            contractFileInputRef={contractFileInputRef}
-            onImportContracts={handleImportContractsFile}
-            onExportContractsCsv={exportContractsToCsv}
+            }
           />
         ) : currentPage === "contract-detail" ? (
           <ContractDetailView

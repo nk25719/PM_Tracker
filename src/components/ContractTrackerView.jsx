@@ -14,6 +14,9 @@ export default function ContractTrackerView({
   contractFileInputRef,
   onImportContracts,
   onExportContractsCsv,
+  isAddEquipmentVisible,
+  onToggleAddEquipment,
+  addEquipmentPanel,
 }) {
   return (
     <div className="card contracts-view-card">
@@ -39,7 +42,12 @@ export default function ContractTrackerView({
         <button className="button" onClick={onExportContractsCsv}>
           Export Contracts CSV
         </button>
+        <button className={`button ${isAddEquipmentVisible ? "button-primary" : ""}`} onClick={onToggleAddEquipment}>
+          {isAddEquipmentVisible ? "Hide Add Equipment" : "Show Add Equipment"}
+        </button>
       </div>
+
+      {isAddEquipmentVisible ? addEquipmentPanel : null}
 
       <div className="table-wrap">
         <table className="table">
