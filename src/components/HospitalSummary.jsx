@@ -47,6 +47,20 @@ export default function HospitalSummary({
 
             <div className="hospital-stats">
               <div className="stat-box">
+                <div className="stat-label">PM done / required</div>
+                <div className="stat-value">
+                  {item.pmCompletedTotal}/{item.pmRequiredTotal}
+                </div>
+              </div>
+              <div className="stat-box">
+                <div className="stat-label">PM1 available</div>
+                <div className="stat-value">{item.pm1Available}</div>
+              </div>
+              <div className="stat-box">
+                <div className="stat-label">PM2 available</div>
+                <div className="stat-value">{item.pm2Available}</div>
+              </div>
+              <div className="stat-box">
                 <div className="stat-label">Upcoming</div>
                 <div className="stat-value">{item.upcoming}</div>
               </div>

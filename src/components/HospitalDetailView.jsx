@@ -134,6 +134,12 @@ export default function HospitalDetailView({
           equipment: row.equipment,
           serial: row.serial,
         })),
+        ...(row.contractHistory || []).map((item) => ({
+          ...item,
+          type: "contract",
+          equipment: row.equipment,
+          serial: row.serial,
+        })),
       ])
       .sort((a, b) => new Date(b.at || b.date || 0) - new Date(a.at || a.date || 0));
   }, [selectedRows]);
@@ -310,6 +316,11 @@ export default function HospitalDetailView({
                 <tr>
                   <th>Equipment</th>
                   <th>Department</th>
+                  <th>PM Required</th>
+                  <th>PM Done</th>
+                  <th>PM1</th>
+                  <th>PM2</th>
+                  <th>Other PM</th>
                   <th>Next PM</th>
                   <th>Timing</th>
                   <th>Status</th>
@@ -319,6 +330,11 @@ export default function HospitalDetailView({
                 {selectedRows.length ? (
                   selectedRows.map((row) => {
                     const meta = getTrackingMeta(row);
+                    const requiredPmCount = Number(row.pmsPerYear) || 1;
+                    const completedPmCount = (row.pmHistory || []).filter((entry) => entry.status === "Completed").length;
+                    const pm1Status = completedPmCount >= 1 ? "Available" : "Required";
+                    const pm2Status = completedPmCount >= 2 ? "Available" : "Required";
+                    const otherPmStatus = requiredPmCount > 2 ? `${Math.max(0, completedPmCount - 2)}/${requiredPmCount - 2} available` : "N/A";
                     return (
                       <tr key={row.id} className={selectedEquipmentIds.length ? "hospital-status-row-selected" : ""}>
                         <td>
@@ -326,6 +342,11 @@ export default function HospitalDetailView({
                           <div className="muted">{row.serial || "No serial"}</div>
                         </td>
                         <td>{row.department || "—"}</td>
+                        <td>{requiredPmCount}</td>
+                        <td>{completedPmCount}</td>
+                        <td>{pm1Status}</td>
+                        <td>{pm2Status}</td>
+                        <td>{otherPmStatus}</td>
                         <td>{row.nextPmDate || "—"}</td>
                         <td className="muted">
                           {meta.isOverdue
@@ -342,7 +363,7 @@ export default function HospitalDetailView({
                   })
                 ) : (
                   <tr>
-                    <td colSpan={5} className="muted">
+                    <td colSpan={10} className="muted">
                       No equipment found for this hospital.
                     </td>
                   </tr>
@@ -371,7 +392,7 @@ export default function HospitalDetailView({
           </form>
 
           <div className="com-history-wrap com-history-major">
-            <h3 className="section-title hospital-subsection-title">COM History (selected view)</h3>
+            <h3 className="section-title hospital-subsection-title">Dedicated Equipment + Contract History</h3>
             {communicationTimeline.length ? (
               <div className="history-list">
                 {communicationTimeline.slice(0, 40).map((entry, idx) => (

@@ -127,6 +127,28 @@ const initialData = [
   },
 ];
 
+function getPmCompletionCount(row) {
+  return (row.pmHistory || []).filter((entry) => entry.status === "Completed").length;
+}
+
+function getPmSlotStatus(row, slotNumber) {
+  return getPmCompletionCount(row) >= slotNumber ? "Available" : "Required";
+}
+
+function appendContractHistoryEntry(baseHistory, rowSnapshot, note, actor) {
+  return [
+    ...(baseHistory || []),
+    {
+      at: new Date().toISOString(),
+      by: actor || rowSnapshot.engineer || rowSnapshot.updatedBy || "System",
+      note,
+      contractNo: rowSnapshot.contractNo || "",
+      contractStartDate: rowSnapshot.contractStartDate || "",
+      contractEndDate: rowSnapshot.contractEndDate || "",
+    },
+  ];
+}
+
 export default function App() {
   const defaultEquipmentForm = createDefaultEquipmentForm();
 
@@ -266,13 +288,26 @@ export default function App() {
     const map = {};
     rows.forEach((row) => {
       if (!map[row.hospital]) {
-        map[row.hospital] = { total: 0, overdue: 0, upcoming: 0, dueSoon: 0 };
+        map[row.hospital] = {
+          total: 0,
+          overdue: 0,
+          upcoming: 0,
+          dueSoon: 0,
+          pmRequiredTotal: 0,
+          pmCompletedTotal: 0,
+          pm1Available: 0,
+          pm2Available: 0,
+        };
       }
       const meta = getTrackingMeta(row);
       map[row.hospital].total += 1;
       if (meta.isOverdue) map[row.hospital].overdue += 1;
       if (row.status === "Upcoming") map[row.hospital].upcoming += 1;
       if (meta.dueSoon7) map[row.hospital].dueSoon += 1;
+      map[row.hospital].pmRequiredTotal += Number(row.pmsPerYear) || 1;
+      map[row.hospital].pmCompletedTotal += getPmCompletionCount(row);
+      if (getPmSlotStatus(row, 1) === "Available") map[row.hospital].pm1Available += 1;
+      if (getPmSlotStatus(row, 2) === "Available") map[row.hospital].pm2Available += 1;
     });
     return Object.entries(map).map(([hospital, values]) => ({ hospital, ...values }));
   }, [rows]);
@@ -296,12 +331,25 @@ export default function App() {
           contractStartDate: row.contractStartDate,
           contractEndDate: endDate,
           daysLeft,
+          equipment: [],
+          contractHistory: [],
         });
       }
+      const contractRecord = contractMap.get(key);
+      const equipmentLabel = [row.equipment || "Unnamed equipment", row.serial ? `(${row.serial})` : ""].join(" ").trim();
+      contractRecord.equipment.push(equipmentLabel);
+      contractRecord.contractHistory.push(...(row.contractHistory || []));
     });
 
     return Array.from(contractMap.values())
       .filter((item) => item.hospital || item.contractNo)
+      .map((item) => ({
+        ...item,
+        equipment: Array.from(new Set(item.equipment)).sort(),
+        contractHistory: item.contractHistory
+          .filter((entry) => entry.note || entry.contractNo || entry.contractEndDate || entry.contractStartDate)
+          .sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0)),
+      }))
       .sort((a, b) => a.daysLeft - b.daysLeft);
   }, [rows]);
 
@@ -309,6 +357,24 @@ export default function App() {
     () => parseBulkEquipmentLines(bulkEquipmentText),
     [bulkEquipmentText]
   );
+
+  const editingPmSummary = useMemo(() => {
+    if (!editingId) return null;
+    const row = rows.find((item) => item.id === editingId);
+    if (!row) return null;
+    const completedPmCount = getPmCompletionCount(row);
+    const requiredPmCount = Number(row.pmsPerYear) || 1;
+    return {
+      completedPmCount,
+      requiredPmCount,
+      pm1: completedPmCount >= 1 ? "Available" : "Required",
+      pm2: completedPmCount >= 2 ? "Available" : "Required",
+      otherPm:
+        requiredPmCount > 2
+          ? `${Math.max(0, completedPmCount - 2)}/${requiredPmCount - 2} available`
+          : "N/A",
+    };
+  }, [editingId, rows]);
 
   function openHospitalDetail(hospital) {
     setSelectedHospitalDetail(hospital);
@@ -382,10 +448,22 @@ export default function App() {
         const contractKey = `${row.hospital || ""}::${row.contractNo || ""}`;
         const importedContract = contractsMap.get(contractKey);
         if (!importedContract) return row;
+        const hasContractChange =
+          importedContract.contractStartDate !== row.contractStartDate ||
+          importedContract.contractEndDate !== row.contractEndDate;
+        const actor = row.updatedBy || row.engineer || "System";
         return {
           ...row,
           contractStartDate: importedContract.contractStartDate,
           contractEndDate: importedContract.contractEndDate,
+          contractHistory: hasContractChange
+            ? appendContractHistoryEntry(
+                row.contractHistory,
+                { ...row, ...importedContract },
+                "Contract dates updated from imported contracts file",
+                actor
+              )
+            : row.contractHistory || [],
         };
       })
     );
@@ -529,11 +607,23 @@ export default function App() {
         payload.status === "Completed" &&
         payload.completionDate &&
         payload.completionDate !== existingRow?.completionDate;
+      const contractChanged =
+        payload.contractNo !== existingRow?.contractNo ||
+        payload.contractStartDate !== existingRow?.contractStartDate ||
+        payload.contractEndDate !== existingRow?.contractEndDate;
 
       updateRow(
         editingId,
         {
           ...payload,
+          contractHistory: contractChanged
+            ? appendContractHistoryEntry(
+                existingRow?.contractHistory,
+                payload,
+                "Contract details updated from equipment form",
+                actor
+              )
+            : existingRow?.contractHistory || [],
           pmHistory: completionChanged
             ? [
                 ...(existingRow?.pmHistory || []),
@@ -559,6 +649,10 @@ export default function App() {
               createdDate: today,
               updatedDate: today,
               updatedBy: actor,
+              contractHistory:
+                payload.contractNo || payload.contractStartDate || payload.contractEndDate
+                  ? appendContractHistoryEntry([], payload, "Contract details added with equipment", actor)
+                  : [],
               pmHistory:
                 payload.status === "Completed" && payload.completionDate
                   ? [
@@ -585,6 +679,10 @@ export default function App() {
                 createdDate: today,
                 updatedDate: today,
                 updatedBy: actor,
+                contractHistory:
+                  payload.contractNo || payload.contractStartDate || payload.contractEndDate
+                    ? appendContractHistoryEntry([], payload, "Contract details added with equipment", actor)
+                    : [],
                 pmHistory:
                   payload.status === "Completed" && payload.completionDate
                     ? [
@@ -819,7 +917,7 @@ export default function App() {
                 <input className="input" placeholder="Model" value={equipmentForm.model} onChange={(e) => handleFormChange("model", e.target.value)} />
                 <input className="input" placeholder="Serial" value={equipmentForm.serial} onChange={(e) => handleFormChange("serial", e.target.value)} />
                 <input className="input" placeholder="Department" value={equipmentForm.department} onChange={(e) => handleFormChange("department", e.target.value)} />
-                <input className="input" type="number" min="1" placeholder="PMs per Year" value={equipmentForm.pmsPerYear} onChange={(e) => handleFormChange("pmsPerYear", e.target.value)} />
+                <input className="input" type="number" min="1" placeholder="PMs per Year (Required)" value={equipmentForm.pmsPerYear} onChange={(e) => handleFormChange("pmsPerYear", e.target.value)} />
                 <input className="input" type="date" value={equipmentForm.nextPmDate} onChange={(e) => handleFormChange("nextPmDate", e.target.value)} />
                 <input className="input" type="date" value={equipmentForm.lastPmDate} onChange={(e) => handleFormChange("lastPmDate", e.target.value)} />
                 <input className="input" type="date" value={equipmentForm.completionDate} onChange={(e) => handleFormChange("completionDate", e.target.value)} />
@@ -837,6 +935,19 @@ export default function App() {
                 <input className="input" type="email" placeholder="Hospital Contact Email" value={equipmentForm.contactEmail} onChange={(e) => handleFormChange("contactEmail", e.target.value)} />
                 <input className="input" placeholder="Updated by" value={equipmentForm.updatedBy} onChange={(e) => handleFormChange("updatedBy", e.target.value)} />
               </div>
+              {editingPmSummary ? (
+                <div className="bulk-add-wrap">
+                  <div className="strong">PM Status Snapshot</div>
+                  <div className="muted">
+                    Completed: {editingPmSummary.completedPmCount} / Required: {editingPmSummary.requiredPmCount}
+                  </div>
+                  <div className="bulk-preview-list">
+                    <div className="bulk-preview-item"><span className="strong">PM1:</span> {editingPmSummary.pm1}</div>
+                    <div className="bulk-preview-item"><span className="strong">PM2:</span> {editingPmSummary.pm2}</div>
+                    <div className="bulk-preview-item"><span className="strong">Other PM:</span> {editingPmSummary.otherPm}</div>
+                  </div>
+                </div>
+              ) : null}
               {!editingId ? (
                 <div className="bulk-add-wrap">
                   <div className="strong">Bulk equipment add for this hospital + contract</div>

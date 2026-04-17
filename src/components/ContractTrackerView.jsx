@@ -48,8 +48,10 @@ export default function ContractTrackerView({
               <th>Contract #</th>
               <th>Start date</th>
               <th>End date</th>
+              <th>Equipment in contract</th>
               <th>Expiration</th>
               <th>Renewal reminder</th>
+              <th>Contract history</th>
             </tr>
           </thead>
           <tbody>
@@ -62,6 +64,9 @@ export default function ContractTrackerView({
                     <td>{contract.contractNo || "—"}</td>
                     <td>{contract.contractStartDate || "—"}</td>
                     <td>{contract.contractEndDate || "—"}</td>
+                    <td className="muted">
+                      {contract.equipment?.length ? `${contract.equipment.length} item(s): ${contract.equipment.join(", ")}` : "—"}
+                    </td>
                     <td>
                       <span className={timing.className}>{timing.label}</span>
                     </td>
@@ -70,12 +75,20 @@ export default function ContractTrackerView({
                         ? "Send renewal follow-up now."
                         : "No immediate action needed."}
                     </td>
+                    <td className="muted">
+                      {contract.contractHistory?.length
+                        ? contract.contractHistory
+                            .slice(0, 3)
+                            .map((entry) => `${entry.at ? entry.at.slice(0, 10) : "Unknown"} - ${entry.note || "Updated"}`)
+                            .join(" | ")
+                        : "No contract history yet"}
+                    </td>
                   </tr>
                 );
               })
             ) : (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={8} className="muted">
                   No contracts found yet. Add contract start/end dates in equipment records to populate this view.
                 </td>
               </tr>
