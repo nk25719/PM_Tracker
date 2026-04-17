@@ -10,6 +10,7 @@ function getContractTimingLabel(daysLeft) {
 export default function ContractTrackerView({
   contracts,
   onBack,
+  onOpenContract,
   contractFileInputRef,
   onImportContracts,
   onExportContractsCsv,
@@ -54,6 +55,7 @@ export default function ContractTrackerView({
               <th>Expiration</th>
               <th>Renewal reminder</th>
               <th>Contract history</th>
+              <th>Details</th>
             </tr>
           </thead>
           <tbody>
@@ -89,12 +91,17 @@ export default function ContractTrackerView({
                             .join(" | ")
                         : "No contract history yet"}
                     </td>
+                    <td>
+                      <button className="button button-soft" onClick={() => onOpenContract(contract.id)}>
+                        View contract
+                      </button>
+                    </td>
                   </tr>
                 );
               })
             ) : (
               <tr>
-                <td colSpan={10} className="muted">
+                <td colSpan={11} className="muted">
                   No contracts found yet. Add contract start/end dates in equipment records to populate this view.
                 </td>
               </tr>

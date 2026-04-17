@@ -10,6 +10,7 @@ import ImportExportBar from "./components/ImportExportBar";
 import EquipmentDetailModal from "./components/EquipmentDetailModal";
 import HospitalDetailView from "./components/HospitalDetailView";
 import ContractTrackerView from "./components/ContractTrackerView";
+import ContractDetailView from "./components/ContractDetailView";
 import {
   addMonths,
   getIntervalMonths,
@@ -184,6 +185,19 @@ function collectPmDatesFromImport(row) {
   return Array.from(new Set([...explicitPmDates, ...numberedPmDates]));
 }
 
+function splitImportedEquipment(rawEquipment) {
+  const text = String(rawEquipment || "").trim();
+  if (!text) return [];
+  return Array.from(
+    new Set(
+      text
+        .split(/[|;\n]/)
+        .map((value) => value.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
 export default function App() {
   const defaultEquipmentForm = createDefaultEquipmentForm();
 
@@ -199,6 +213,7 @@ export default function App() {
   const [equipmentForm, setEquipmentForm] = useState(defaultEquipmentForm);
   const [detailRow, setDetailRow] = useState(null);
   const [selectedHospitalDetail, setSelectedHospitalDetail] = useState(null);
+  const [selectedContractId, setSelectedContractId] = useState(null);
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [hospitalSummaryFilter, setHospitalSummaryFilter] = useState("All");
   const [bulkEquipmentText, setBulkEquipmentText] = useState("");
@@ -429,6 +444,12 @@ export default function App() {
 
   function closeContractsView() {
     setCurrentPage("dashboard");
+    setSelectedContractId(null);
+  }
+
+  function openContractDetail(contractId) {
+    setSelectedContractId(contractId);
+    setCurrentPage("contract-detail");
   }
 
   async function handleImportFile(event) {
@@ -468,18 +489,30 @@ export default function App() {
     }
 
     const normalizedContracts = importedRows
-      .map((row) => ({
-        hospital: row.Hospital || row.hospital || "",
-        contractNo: row["Contract No."] || row.contractNo || row["Contract Number"] || "",
-        equipment: row.Equipment || row.equipment || row.Subsystem || row.subsystem || "",
-        model: row.Model || row.model || "",
-        serial: row["Serial Number"] || row.serial || row.Serial || "",
-        contractStartDate: row["Contract Start Date"] || row.contractStartDate || "",
-        contractEndDate: row["Contract End Date"] || row.contractEndDate || "",
-        pmsPerYear: Math.max(1, Number(row["PMs per Year"] || row.pmsPerYear || 1) || 1),
-        nextPmDate: row["Next PM Date"] || row.nextPmDate || "",
-        pmDates: collectPmDatesFromImport(row),
-      }))
+      .flatMap((row) => {
+        const equipmentField = row.Equipment || row.equipment || row.Subsystem || row.subsystem || "";
+        const equipmentItems = splitImportedEquipment(equipmentField);
+        const baseContract = {
+          hospital: row.Hospital || row.hospital || "",
+          contractNo: row["Contract No."] || row.contractNo || row["Contract Number"] || "",
+          model: row.Model || row.model || "",
+          serial: row["Serial Number"] || row.serial || row.Serial || "",
+          contractStartDate: row["Contract Start Date"] || row.contractStartDate || "",
+          contractEndDate: row["Contract End Date"] || row.contractEndDate || "",
+          pmsPerYear: Math.max(1, Number(row["PMs per Year"] || row.pmsPerYear || 1) || 1),
+          nextPmDate: row["Next PM Date"] || row.nextPmDate || "",
+          pmDates: collectPmDatesFromImport(row),
+        };
+
+        if (!equipmentItems.length) {
+          return [{ ...baseContract, equipment: "" }];
+        }
+
+        return equipmentItems.map((equipmentItem) => ({
+          ...baseContract,
+          equipment: equipmentItem,
+        }));
+      })
       .filter((row) => row.hospital || row.contractNo);
 
     if (!normalizedContracts.length) {
@@ -1175,9 +1208,15 @@ export default function App() {
           <ContractTrackerView
             contracts={contractRows}
             onBack={closeContractsView}
+            onOpenContract={openContractDetail}
             contractFileInputRef={contractFileInputRef}
             onImportContracts={handleImportContractsFile}
             onExportContractsCsv={exportContractsToCsv}
+          />
+        ) : currentPage === "contract-detail" ? (
+          <ContractDetailView
+            contract={contractRows.find((contract) => contract.id === selectedContractId)}
+            onBack={() => setCurrentPage("contracts")}
           />
         ) : (
           <EquipmentTable
