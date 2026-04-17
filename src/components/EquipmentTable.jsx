@@ -29,6 +29,7 @@ export default function EquipmentTable({
               <th>Completion</th>
               <th>PM1</th>
               <th>PM2</th>
+              <th>PM3</th>
               <th>Engineer</th>
               <th>Reminders</th>
               <th>Due-soon Flags</th>
@@ -60,6 +61,7 @@ export default function EquipmentTable({
                   <td>{row.completionDate || "—"}</td>
                   <td>{getPmSlotStatus(row, 1)}</td>
                   <td>{getPmSlotStatus(row, 2)}</td>
+                  <td>{getPmSlotStatus(row, 3)}</td>
                   <td>{row.engineer}</td>
                   <td className="muted">
                     <div>R1: {row.reminder1Sent ? "Sent" : "Pending"}</div>

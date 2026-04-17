@@ -123,6 +123,9 @@ export function normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate)
       const createdDate = row["Created Date"] || row.createdDate || getTodayIsoDate();
       const updatedDate = row["Updated Date"] || row.updatedDate || createdDate;
       const updatedBy = row["Updated By"] || row.updatedBy || row.engineer || "System";
+      const pm1Placeholder = row.PM1 || row.pm1 || row["PM 1"] || "";
+      const pm2Placeholder = row.PM2 || row.pm2 || row["PM 2"] || "";
+      const pm3Placeholder = row.PM3 || row.pm3 || row["PM 3"] || "";
 
       if (!hospital && !equipment && !serial) return null;
 
@@ -154,6 +157,9 @@ export function normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate)
         createdDate,
         updatedDate,
         updatedBy,
+        pm1Placeholder,
+        pm2Placeholder,
+        pm3Placeholder,
         pmHistory: [],
         comments: [],
         emailHistory: [],
@@ -188,6 +194,9 @@ export function exportRowsToCsv(rows, getIntervalMonths) {
     "Created Date",
     "Updated Date",
     "Updated By",
+    "PM1",
+    "PM2",
+    "PM3",
   ];
 
   const csv = [headers.join(",")]
@@ -218,6 +227,9 @@ export function exportRowsToCsv(rows, getIntervalMonths) {
           row.createdDate,
           row.updatedDate,
           row.updatedBy,
+          row.pm1Placeholder || "",
+          row.pm2Placeholder || "",
+          row.pm3Placeholder || "",
         ]
           .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
           .join(",")

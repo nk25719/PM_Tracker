@@ -320,6 +320,7 @@ export default function HospitalDetailView({
                   <th>PM Done</th>
                   <th>PM1</th>
                   <th>PM2</th>
+                  <th>PM3</th>
                   <th>Other PM</th>
                   <th>Next PM</th>
                   <th>Timing</th>
@@ -334,7 +335,8 @@ export default function HospitalDetailView({
                     const completedPmCount = (row.pmHistory || []).filter((entry) => entry.status === "Completed").length;
                     const pm1Status = completedPmCount >= 1 ? "Available" : "Required";
                     const pm2Status = completedPmCount >= 2 ? "Available" : "Required";
-                    const otherPmStatus = requiredPmCount > 2 ? `${Math.max(0, completedPmCount - 2)}/${requiredPmCount - 2} available` : "N/A";
+                    const pm3Status = completedPmCount >= 3 ? "Available" : "Required";
+                    const otherPmStatus = requiredPmCount > 3 ? `${Math.max(0, completedPmCount - 3)}/${requiredPmCount - 3} available` : "N/A";
                     return (
                       <tr key={row.id} className={selectedEquipmentIds.length ? "hospital-status-row-selected" : ""}>
                         <td>
@@ -346,6 +348,7 @@ export default function HospitalDetailView({
                         <td>{completedPmCount}</td>
                         <td>{pm1Status}</td>
                         <td>{pm2Status}</td>
+                        <td>{pm3Status}</td>
                         <td>{otherPmStatus}</td>
                         <td>{row.nextPmDate || "—"}</td>
                         <td className="muted">
@@ -363,7 +366,7 @@ export default function HospitalDetailView({
                   })
                 ) : (
                   <tr>
-                    <td colSpan={10} className="muted">
+                    <td colSpan={11} className="muted">
                       No equipment found for this hospital.
                     </td>
                   </tr>

@@ -79,6 +79,9 @@ export function normalizeRows(rows) {
     status: normalizeStatus(row.status || "Upcoming"),
     comments: Array.isArray(row.comments) ? row.comments : [],
     emailHistory: Array.isArray(row.emailHistory) ? row.emailHistory : [],
+    pm1Placeholder: row.pm1Placeholder || "",
+    pm2Placeholder: row.pm2Placeholder || "",
+    pm3Placeholder: row.pm3Placeholder || "",
   }));
 }
 
@@ -102,6 +105,9 @@ export function createDefaultEquipmentForm() {
     contactEmail: "",
     notes: "",
     updatedBy: "",
+    pm1Placeholder: "",
+    pm2Placeholder: "",
+    pm3Placeholder: "",
   };
 }
 
@@ -125,5 +131,8 @@ export function createEquipmentFormFromRow(row) {
     contactEmail: row.contactEmail || "",
     notes: row.notes || "",
     updatedBy: row.updatedBy || row.engineer || "",
+    pm1Placeholder: row.pm1Placeholder || "",
+    pm2Placeholder: row.pm2Placeholder || "",
+    pm3Placeholder: row.pm3Placeholder || "",
   };
 }
