@@ -301,6 +301,10 @@ body {
   gap: 12px;
 }
 
+.hospital-summary-quick-actions {
+  margin-bottom: 4px;
+}
+
 .hospital-summary-card {
   min-width: 380px;
   min-height: 100%;

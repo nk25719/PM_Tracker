@@ -7,6 +7,7 @@ export default function HospitalSummary({
   onSelectHospital,
   hospitalSummaryFilter,
   onHospitalSummaryFilterChange,
+  quickActions,
 }) {
   const visibleHospitals =
     hospitalSummaryFilter === "All"
@@ -31,6 +32,7 @@ export default function HospitalSummary({
         </select>
       </div>
       <div className="hospital-list">
+        {quickActions ? <div className="hospital-summary-quick-actions">{quickActions}</div> : null}
         {visibleHospitals.map((item) => (
           <button
             key={item.hospital}

@@ -940,6 +940,53 @@ export default function App() {
     setQuickActionFeedback(`Engineers notified for ${actionableRows.length} equipment item(s).`);
   }
 
+  function handleHospitalEmailQuickAction(targetRows = [], subject = "PM follow-up email") {
+    const actionableRows = targetRows.filter((row) => getTrackingMeta(row).effectiveStatus !== "Completed");
+    if (!actionableRows.length) {
+      setQuickActionFeedback("No pending PM items found for email follow-up.");
+      return;
+    }
+
+    const targetIds = new Set(actionableRows.map((row) => row.id));
+    const stageCounts = { r1: 0, r2: 0, alert: 0, noChange: 0 };
+
+    setRows((current) =>
+      current.map((row) => {
+        if (!targetIds.has(row.id)) return row;
+
+        const patch = {
+          updatedBy: row.updatedBy || "PM Coordinator",
+          updatedDate: getTodayIsoDate(),
+        };
+
+        if (!row.reminder1Sent) {
+          patch.reminder1Sent = true;
+          if (row.status === "Upcoming") patch.status = "Hospital notified";
+          stageCounts.r1 += 1;
+        } else if (!row.reminder2Sent) {
+          patch.reminder2Sent = true;
+          stageCounts.r2 += 1;
+        } else if (!row.engineerAlertSent) {
+          patch.engineerAlertSent = true;
+          stageCounts.alert += 1;
+        } else {
+          stageCounts.noChange += 1;
+        }
+
+        return { ...row, ...patch };
+      })
+    );
+
+    logHospitalEmailHistory(actionableRows, subject);
+
+    const feedbackParts = [];
+    if (stageCounts.r1) feedbackParts.push(`R1 sent for ${stageCounts.r1}`);
+    if (stageCounts.r2) feedbackParts.push(`R2 sent for ${stageCounts.r2}`);
+    if (stageCounts.alert) feedbackParts.push(`Engineer alert sent for ${stageCounts.alert}`);
+    if (stageCounts.noChange) feedbackParts.push(`${stageCounts.noChange} already fully updated`);
+    setQuickActionFeedback(`Email follow-up updated ${actionableRows.length} item(s): ${feedbackParts.join(" · ")}.`);
+  }
+
 
 
   function addCommunicationEntry(rowIds, entryBuilder) {
@@ -988,6 +1035,52 @@ export default function App() {
         onSelectHospital={openHospitalDetail}
         hospitalSummaryFilter={hospitalSummaryFilter}
         onHospitalSummaryFilterChange={setHospitalSummaryFilter}
+        quickActions={
+          <div className="side-actions">
+            <h3 className="section-title">Quick Actions</h3>
+            <div className="quick-action-block">
+              <label className="muted">Reminder window</label>
+              <select className="select" value={reminderWindow} onChange={(event) => setReminderWindow(event.target.value)}>
+                <option value="next-week">Next week</option>
+                <option value="next-month">Next month</option>
+              </select>
+              <label className="muted">Send at (date/time)</label>
+              <input className="input" type="datetime-local" value={reminderScheduleAt} onChange={(event) => setReminderScheduleAt(event.target.value)} />
+            </div>
+            <button className="button" onClick={handleUpcomingReminderAction}>
+              <Bell size={16} className="inline-icon" />
+              Send Upcoming PM Reminders
+            </button>
+            <button className="button" onClick={showOverdueQuickAction}>
+              <AlertTriangle size={16} className="inline-icon" />
+              View Overdue Equipment
+            </button>
+            <button className="button" onClick={markOverdueReminderOneSent}>
+              Mark Overdue R1 as Sent
+            </button>
+            <button className="button" onClick={markOverdueReminderTwoSent}>
+              Mark Overdue R2 as Sent
+            </button>
+            <button className="button" onClick={markOverdueEngineerAlertSent}>
+              Mark Overdue Alerts as Sent
+            </button>
+            <div className="quick-action-block ai-insight-card">
+              <div className="strong">AI Recommendations</div>
+              <div className="muted">
+                {aiInsights.riskiestHospital
+                  ? `${aiInsights.riskiestHospital[0]} has the highest overdue load (${aiInsights.riskiestHospital[1]}).`
+                  : "No overdue risk hotspots right now."}
+              </div>
+              <div className="muted">
+                {aiInsights.soonRows.length} equipment item(s) are due in 7 days. Prioritize engineer dispatch now.
+              </div>
+              <button className="button button-soft" onClick={() => handleNotifyEngineersQuickAction(aiInsights.soonRows, "AI suggested due-soon dispatch")}>
+                Send AI-Suggested Dispatch
+              </button>
+            </div>
+            {quickActionFeedback ? <div className="quick-action-feedback">{quickActionFeedback}</div> : null}
+          </div>
+        }
       />
     );
   }
@@ -1195,62 +1288,11 @@ export default function App() {
             rows={hospitalDetailRows}
             getTrackingMeta={getTrackingMeta}
             onBack={() => setCurrentPage("hospital-status")}
-            onSendHospitalEmail={handleNotifyEngineersQuickAction}
+            onSendHospitalEmail={handleHospitalEmailQuickAction}
             onAddHospitalComment={handleAddHospitalComment}
           />
         ) : currentPage === "hospital-status" ? (
-          <div className="main-grid">
-            <div className="side-grid">
-              <div className="card">
-                <h2 className="section-title">Quick Actions</h2>
-                <div className="side-actions">
-                  <div className="quick-action-block">
-                    <label className="muted">Reminder window</label>
-                    <select className="select" value={reminderWindow} onChange={(event) => setReminderWindow(event.target.value)}>
-                      <option value="next-week">Next week</option>
-                      <option value="next-month">Next month</option>
-                    </select>
-                    <label className="muted">Send at (date/time)</label>
-                    <input className="input" type="datetime-local" value={reminderScheduleAt} onChange={(event) => setReminderScheduleAt(event.target.value)} />
-                  </div>
-                  <button className="button" onClick={handleUpcomingReminderAction}>
-                    <Bell size={16} className="inline-icon" />
-                    Send Upcoming PM Reminders
-                  </button>
-                  <button className="button" onClick={showOverdueQuickAction}>
-                    <AlertTriangle size={16} className="inline-icon" />
-                    View Overdue Equipment
-                  </button>
-                  <button className="button" onClick={markOverdueReminderOneSent}>
-                    Mark Overdue R1 as Sent
-                  </button>
-                  <button className="button" onClick={markOverdueReminderTwoSent}>
-                    Mark Overdue R2 as Sent
-                  </button>
-                  <button className="button" onClick={markOverdueEngineerAlertSent}>
-                    Mark Overdue Alerts as Sent
-                  </button>
-                  <div className="quick-action-block ai-insight-card">
-                    <div className="strong">AI Recommendations</div>
-                    <div className="muted">
-                      {aiInsights.riskiestHospital
-                        ? `${aiInsights.riskiestHospital[0]} has the highest overdue load (${aiInsights.riskiestHospital[1]}).`
-                        : "No overdue risk hotspots right now."}
-                    </div>
-                    <div className="muted">
-                      {aiInsights.soonRows.length} equipment item(s) are due in 7 days. Prioritize engineer dispatch now.
-                    </div>
-                    <button className="button button-soft" onClick={() => handleNotifyEngineersQuickAction(aiInsights.soonRows, "AI suggested due-soon dispatch")}>
-                      Send AI-Suggested Dispatch
-                    </button>
-                  </div>
-                  {quickActionFeedback ? <div className="quick-action-feedback">{quickActionFeedback}</div> : null}
-                </div>
-              </div>
-            </div>
-
-            {renderHospitalSummaryPanel()}
-          </div>
+          renderHospitalSummaryPanel()
         ) : currentPage === "contracts" ? (
           <ContractTrackerView
             contracts={contractRows}

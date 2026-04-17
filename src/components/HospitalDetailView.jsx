@@ -105,7 +105,7 @@ export default function HospitalDetailView({
   const generatedEmailText = emailDraft ? `Subject: ${emailDraft.subject}\n\n${emailDraft.body}` : "";
   const canEmailSelected = pendingRows.length > 0;
   const selectedMailTo = canEmailSelected
-    ? `mailto:${Array.from(new Set(selectedRows.map((row) => row.contactEmail).filter(Boolean))).join(",")}?subject=${encodeURIComponent(emailDraft.subject)}&body=${encodeURIComponent(emailDraft.body)}`
+    ? `mailto:${Array.from(new Set(pendingRows.map((row) => row.contactEmail).filter(Boolean))).join(",")}?subject=${encodeURIComponent(emailDraft.subject)}&body=${encodeURIComponent(emailDraft.body)}`
     : "";
 
   const engineerDispatchMessage = useMemo(
@@ -201,7 +201,7 @@ export default function HospitalDetailView({
 
   function handleOpenEmailClient() {
     if (!canEmailSelected) return;
-    onSendHospitalEmail?.(selectedRows, emailDraft.subject);
+    onSendHospitalEmail?.(pendingRows, emailDraft.subject);
   }
 
   function handleNotifyEngineers() {
