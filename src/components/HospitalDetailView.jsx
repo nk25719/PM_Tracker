@@ -71,6 +71,7 @@ export default function HospitalDetailView({
   getTrackingMeta,
   onSendHospitalEmail,
   onAddHospitalComment,
+  quickActionFeedback,
 }) {
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState([]);
   const [copied, setCopied] = useState(false);
@@ -306,6 +307,7 @@ export default function HospitalDetailView({
           }
         />
       </div>
+      {quickActionFeedback ? <div className="quick-action-feedback">{quickActionFeedback}</div> : null}
 
       <div className="hospital-detail-layout">
         <div className="hospital-status-view">
