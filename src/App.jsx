@@ -132,6 +132,8 @@ function getPmCompletionCount(row) {
 }
 
 function getPmSlotStatus(row, slotNumber) {
+  const placeholder = row[`pm${slotNumber}Placeholder`];
+  if (placeholder) return placeholder;
   return getPmCompletionCount(row) >= slotNumber ? "Available" : "Required";
 }
 
@@ -297,6 +299,7 @@ export default function App() {
           pmCompletedTotal: 0,
           pm1Available: 0,
           pm2Available: 0,
+          pm3Available: 0,
         };
       }
       const meta = getTrackingMeta(row);
@@ -308,6 +311,7 @@ export default function App() {
       map[row.hospital].pmCompletedTotal += getPmCompletionCount(row);
       if (getPmSlotStatus(row, 1) === "Available") map[row.hospital].pm1Available += 1;
       if (getPmSlotStatus(row, 2) === "Available") map[row.hospital].pm2Available += 1;
+      if (getPmSlotStatus(row, 3) === "Available") map[row.hospital].pm3Available += 1;
     });
     return Object.entries(map).map(([hospital, values]) => ({ hospital, ...values }));
   }, [rows]);
@@ -369,9 +373,10 @@ export default function App() {
       requiredPmCount,
       pm1: completedPmCount >= 1 ? "Available" : "Required",
       pm2: completedPmCount >= 2 ? "Available" : "Required",
+      pm3: completedPmCount >= 3 ? "Available" : "Required",
       otherPm:
-        requiredPmCount > 2
-          ? `${Math.max(0, completedPmCount - 2)}/${requiredPmCount - 2} available`
+        requiredPmCount > 3
+          ? `${Math.max(0, completedPmCount - 3)}/${requiredPmCount - 3} available`
           : "N/A",
     };
   }, [editingId, rows]);
@@ -944,6 +949,7 @@ export default function App() {
                   <div className="bulk-preview-list">
                     <div className="bulk-preview-item"><span className="strong">PM1:</span> {editingPmSummary.pm1}</div>
                     <div className="bulk-preview-item"><span className="strong">PM2:</span> {editingPmSummary.pm2}</div>
+                    <div className="bulk-preview-item"><span className="strong">PM3:</span> {editingPmSummary.pm3}</div>
                     <div className="bulk-preview-item"><span className="strong">Other PM:</span> {editingPmSummary.otherPm}</div>
                   </div>
                 </div>
