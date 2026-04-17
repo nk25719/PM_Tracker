@@ -53,16 +53,12 @@ export default function HospitalSummary({
                 </div>
               </div>
               <div className="stat-box">
-                <div className="stat-label">PM1 available</div>
-                <div className="stat-value">{item.pm1Available}</div>
+                <div className="stat-label">PM placeholders filled</div>
+                <div className="stat-value">{item.pmPlaceholdersFilled}</div>
               </div>
               <div className="stat-box">
-                <div className="stat-label">PM2 available</div>
-                <div className="stat-value">{item.pm2Available}</div>
-              </div>
-              <div className="stat-box">
-                <div className="stat-label">PM3 available</div>
-                <div className="stat-value">{item.pm3Available}</div>
+                <div className="stat-label">PM available to do</div>
+                <div className="stat-value">{item.pmAvailableToDo}</div>
               </div>
               <div className="stat-box">
                 <div className="stat-label">Upcoming</div>

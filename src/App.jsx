@@ -27,6 +27,7 @@ import {
   createDefaultEquipmentForm,
   createEquipmentFormFromRow,
   editableStatuses,
+  MAX_PM_PLACEHOLDERS,
   normalizeRows,
   normalizeStatus,
   statuses,
@@ -135,6 +136,22 @@ function getPmSlotStatus(row, slotNumber) {
   const placeholder = row[`pm${slotNumber}Placeholder`];
   if (placeholder) return placeholder;
   return getPmCompletionCount(row) >= slotNumber ? "Available" : "Required";
+}
+
+function getFilledPmPlaceholderCount(row) {
+  return Array.from({ length: MAX_PM_PLACEHOLDERS }, (_, index) => row[`pm${index + 1}Placeholder`])
+    .filter((value) => String(value || "").trim())
+    .length;
+}
+
+function getAvailablePmCount(row) {
+  const requiredPmCount = Math.max(1, Number(row.pmsPerYear) || 1);
+  const relevantSlots = Math.min(MAX_PM_PLACEHOLDERS, requiredPmCount);
+  let availableCount = 0;
+  for (let slot = 1; slot <= relevantSlots; slot += 1) {
+    if (getPmSlotStatus(row, slot) === "Available") availableCount += 1;
+  }
+  return availableCount;
 }
 
 function appendContractHistoryEntry(baseHistory, rowSnapshot, note, actor) {
@@ -297,9 +314,8 @@ export default function App() {
           dueSoon: 0,
           pmRequiredTotal: 0,
           pmCompletedTotal: 0,
-          pm1Available: 0,
-          pm2Available: 0,
-          pm3Available: 0,
+          pmPlaceholdersFilled: 0,
+          pmAvailableToDo: 0,
         };
       }
       const meta = getTrackingMeta(row);
@@ -309,9 +325,8 @@ export default function App() {
       if (meta.dueSoon7) map[row.hospital].dueSoon += 1;
       map[row.hospital].pmRequiredTotal += Number(row.pmsPerYear) || 1;
       map[row.hospital].pmCompletedTotal += getPmCompletionCount(row);
-      if (getPmSlotStatus(row, 1) === "Available") map[row.hospital].pm1Available += 1;
-      if (getPmSlotStatus(row, 2) === "Available") map[row.hospital].pm2Available += 1;
-      if (getPmSlotStatus(row, 3) === "Available") map[row.hospital].pm3Available += 1;
+      map[row.hospital].pmPlaceholdersFilled += getFilledPmPlaceholderCount(row);
+      map[row.hospital].pmAvailableToDo += getAvailablePmCount(row);
     });
     return Object.entries(map).map(([hospital, values]) => ({ hospital, ...values }));
   }, [rows]);
