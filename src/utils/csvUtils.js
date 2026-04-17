@@ -1,3 +1,5 @@
+import { MAX_PM_PLACEHOLDERS } from "./storage";
+
 function csvBoolean(value, fallback = "") {
   const normalized = String(value || fallback).toLowerCase();
   return normalized === "true" || normalized === "yes";
@@ -123,9 +125,13 @@ export function normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate)
       const createdDate = row["Created Date"] || row.createdDate || getTodayIsoDate();
       const updatedDate = row["Updated Date"] || row.updatedDate || createdDate;
       const updatedBy = row["Updated By"] || row.updatedBy || row.engineer || "System";
-      const pm1Placeholder = row.PM1 || row.pm1 || row["PM 1"] || "";
-      const pm2Placeholder = row.PM2 || row.pm2 || row["PM 2"] || "";
-      const pm3Placeholder = row.PM3 || row.pm3 || row["PM 3"] || "";
+      const pmPlaceholders = Object.fromEntries(
+        Array.from({ length: MAX_PM_PLACEHOLDERS }, (_, slotIndex) => {
+          const slot = slotIndex + 1;
+          const value = row[`PM${slot}`] || row[`pm${slot}`] || row[`PM ${slot}`] || "";
+          return [`pm${slot}Placeholder`, value];
+        })
+      );
 
       if (!hospital && !equipment && !serial) return null;
 
@@ -157,9 +163,7 @@ export function normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate)
         createdDate,
         updatedDate,
         updatedBy,
-        pm1Placeholder,
-        pm2Placeholder,
-        pm3Placeholder,
+        ...pmPlaceholders,
         pmHistory: [],
         comments: [],
         emailHistory: [],
@@ -194,9 +198,7 @@ export function exportRowsToCsv(rows, getIntervalMonths) {
     "Created Date",
     "Updated Date",
     "Updated By",
-    "PM1",
-    "PM2",
-    "PM3",
+    ...Array.from({ length: MAX_PM_PLACEHOLDERS }, (_, index) => `PM${index + 1}`),
   ];
 
   const csv = [headers.join(",")]
@@ -227,9 +229,10 @@ export function exportRowsToCsv(rows, getIntervalMonths) {
           row.createdDate,
           row.updatedDate,
           row.updatedBy,
-          row.pm1Placeholder || "",
-          row.pm2Placeholder || "",
-          row.pm3Placeholder || "",
+          ...Array.from(
+            { length: MAX_PM_PLACEHOLDERS },
+            (_, index) => row[`pm${index + 1}Placeholder`] || ""
+          ),
         ]
           .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
           .join(",")
