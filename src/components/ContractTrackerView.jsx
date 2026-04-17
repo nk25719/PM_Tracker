@@ -31,9 +31,9 @@ export default function ContractTrackerView({
       </div>
 
       <div className="actions contracts-actions-row">
-        <input ref={contractFileInputRef} type="file" accept=".csv" className="hidden-input" onChange={onImportContracts} />
+        <input ref={contractFileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden-input" onChange={onImportContracts} />
         <button className="button" onClick={() => contractFileInputRef.current?.click()}>
-          Import Contracts CSV
+          Import Contracts CSV/Excel
         </button>
         <button className="button" onClick={onExportContractsCsv}>
           Export Contracts CSV

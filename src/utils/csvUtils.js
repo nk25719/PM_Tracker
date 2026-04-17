@@ -3,6 +3,27 @@ function csvBoolean(value, fallback = "") {
   return normalized === "true" || normalized === "yes";
 }
 
+function parseJsonArrayField(value) {
+  if (Array.isArray(value)) return value;
+  if (value == null) return [];
+  const text = String(value).trim();
+  if (!text) return [];
+
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function getCell(row, ...keys) {
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && row[key] !== "") return row[key];
+  }
+  return "";
+}
+
 export function parseCsvLine(line) {
   const values = [];
   let current = "";
@@ -52,15 +73,17 @@ export function parseCsvText(text) {
 
 export async function parseImportFile(file) {
   const extension = (file.name.split(".").pop() || "").toLowerCase();
-  const text = await file.text();
-
-  if (extension === "csv") return parseCsvText(text);
+  if (extension === "csv") {
+    const text = await file.text();
+    return parseCsvText(text);
+  }
 
   if (["xlsx", "xls"].includes(extension)) {
+    const text = await file.text();
     const trimmed = text.trim();
     if (!trimmed) return [];
 
-    // Browser-local fallback for tab-delimited or SpreadsheetML text exports.
+    // Browser-local fallback for tab-delimited exports.
     if (trimmed.includes("\t") && trimmed.includes("\n")) {
       const lines = trimmed.split(/\r?\n/).filter(Boolean);
       const headers = lines[0].split("\t").map((item) => item.trim());
@@ -90,7 +113,7 @@ export async function parseImportFile(file) {
       });
     }
 
-    throw new Error("Excel binary files are supported in desktop mode. In browser mode, save as CSV and import.");
+    throw new Error("Excel binary files are not supported in browser mode. Save as CSV (or XML Spreadsheet) and import.");
   }
 
   return [];
@@ -99,35 +122,40 @@ export async function parseImportFile(file) {
 export function normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate) {
   return rawRows
     .map((row, index) => {
-      const hospital = row.Hospital || row.hospital || row["Parent System"] || row["parent system"] || "";
-      const contractNo = row["Contract No."] || row.contractNo || row["Contract Number"] || "";
+      const hospital = getCell(row, "Hospital", "hospital", "Parent System", "parent system");
+      const contractNo = getCell(row, "Contract No.", "contractNo", "Contract Number");
       const equipment =
-        row.Equipment || row.equipment || row.Subsystem || row.subsystem || row["Source Description"] || "";
-      const model = row.Model || row.model || "";
-      const serial = row["Serial Number"] || row.serial || row.Serial || "";
-      const intervalMonths = Number(row["Interval Months"] || row.intervalMonths || 0) || 0;
+        getCell(row, "Equipment", "equipment", "Subsystem", "subsystem", "Source Description");
+      const model = getCell(row, "Model", "model");
+      const serial = getCell(row, "Serial Number", "serial", "Serial");
+      const intervalMonths = Number(getCell(row, "Interval Months", "intervalMonths")) || 0;
       const pmsPerYear =
-        Number(row["PMs per Year"] || row.pmsPerYear || 0) ||
+        Number(getCell(row, "PMs per Year", "pmsPerYear")) ||
         (intervalMonths > 0 ? Math.max(1, Math.round(12 / intervalMonths)) : 1);
-      const nextPmDate = row["Next PM Date"] || row.nextPmDate || getTodayIsoDate();
-      const status = normalizeStatus(row.Status || row.status || "Upcoming");
-      const contractStartDate = row["Contract Start Date"] || row.contractStartDate || "";
-      const contractEndDate = row["Contract End Date"] || row.contractEndDate || "";
-      const engineer = row["Engineer Assigned"] || row.engineer || "";
-      const contactEmail = row["Hospital Contact Email"] || row.contactEmail || "";
-      const department = row.Department || row.department || "";
-      const notes = row.Notes || row.notes || "";
-      const reminderDates = row["Reminder Dates"] || row.reminderDates || "";
-      const lastPmDate = row["Last PM Date"] || row.lastPmDate || "";
-      const completionDate = row["Completion Date"] || row.completionDate || "";
-      const createdDate = row["Created Date"] || row.createdDate || getTodayIsoDate();
-      const updatedDate = row["Updated Date"] || row.updatedDate || createdDate;
-      const updatedBy = row["Updated By"] || row.updatedBy || row.engineer || "System";
+      const nextPmDate = getCell(row, "Next PM Date", "nextPmDate") || getTodayIsoDate();
+      const status = normalizeStatus(getCell(row, "Status", "status") || "Upcoming");
+      const contractStartDate = getCell(row, "Contract Start Date", "contractStartDate");
+      const contractEndDate = getCell(row, "Contract End Date", "contractEndDate");
+      const engineer = getCell(row, "Engineer Assigned", "engineer");
+      const contactEmail = getCell(row, "Hospital Contact Email", "contactEmail");
+      const department = getCell(row, "Department", "department");
+      const notes = getCell(row, "Notes", "notes");
+      const reminderDates = getCell(row, "Reminder Dates", "reminderDates");
+      const lastPmDate = getCell(row, "Last PM Date", "lastPmDate");
+      const completionDate = getCell(row, "Completion Date", "completionDate");
+      const createdDate = getCell(row, "Created Date", "createdDate") || getTodayIsoDate();
+      const updatedDate = getCell(row, "Updated Date", "updatedDate") || createdDate;
+      const updatedBy = getCell(row, "Updated By", "updatedBy") || engineer || "System";
+      const importedId = Number(getCell(row, "Id", "id")) || Date.now() + index;
+      const contractHistory = parseJsonArrayField(getCell(row, "Contract History", "contractHistory"));
+      const pmHistory = parseJsonArrayField(getCell(row, "PM History", "pmHistory"));
+      const comments = parseJsonArrayField(getCell(row, "Comments", "comments"));
+      const emailHistory = parseJsonArrayField(getCell(row, "Email History", "emailHistory"));
 
       if (!hospital && !equipment && !serial) return null;
 
       return {
-        id: Date.now() + index,
+        id: importedId,
         hospital,
         contractNo,
         equipment,
@@ -145,18 +173,19 @@ export function normalizeImportedRows(rawRows, normalizeStatus, getTodayIsoDate)
         contractEndDate,
         engineer,
         contactEmail,
-        reminder1Sent: csvBoolean(row["Reminder 1 Sent"] || row.reminder1Sent, row["Reminder 1 Sent"]),
-        reminder2Sent: csvBoolean(row["Reminder 2 Sent"] || row.reminder2Sent, row["Reminder 2 Sent"]),
+        reminder1Sent: csvBoolean(getCell(row, "Reminder 1 Sent", "reminder1Sent"), row["Reminder 1 Sent"]),
+        reminder2Sent: csvBoolean(getCell(row, "Reminder 2 Sent", "reminder2Sent"), row["Reminder 2 Sent"]),
         engineerAlertSent: csvBoolean(
-          row["Engineer Alert Sent"] || row.engineerAlertSent,
+          getCell(row, "Engineer Alert Sent", "engineerAlertSent"),
           row["Engineer Alert Sent"]
         ),
         createdDate,
         updatedDate,
         updatedBy,
-        pmHistory: [],
-        comments: [],
-        emailHistory: [],
+        contractHistory,
+        pmHistory,
+        comments,
+        emailHistory,
       };
     })
     .filter(Boolean);
@@ -188,6 +217,11 @@ export function exportRowsToCsv(rows, getIntervalMonths) {
     "Created Date",
     "Updated Date",
     "Updated By",
+    "Contract History",
+    "PM History",
+    "Comments",
+    "Email History",
+    "Id",
   ];
 
   const csv = [headers.join(",")]
@@ -218,6 +252,11 @@ export function exportRowsToCsv(rows, getIntervalMonths) {
           row.createdDate,
           row.updatedDate,
           row.updatedBy,
+          JSON.stringify(row.contractHistory || []),
+          JSON.stringify(row.pmHistory || []),
+          JSON.stringify(row.comments || []),
+          JSON.stringify(row.emailHistory || []),
+          row.id,
         ]
           .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
           .join(",")
