@@ -1053,6 +1053,7 @@ export default function App() {
             handleDelete={handleDelete}
             markComplete={markComplete}
             onViewDetail={setDetailRow}
+            getPmSlotStatus={getPmSlotStatus}
           />
         )}
       </div>

@@ -10,6 +10,7 @@ export default function EquipmentTable({
   handleDelete,
   markComplete,
   onViewDetail,
+  getPmSlotStatus,
 }) {
   return (
     <div className="card">
@@ -26,6 +27,8 @@ export default function EquipmentTable({
               <th>Next PM</th>
               <th>Last PM</th>
               <th>Completion</th>
+              <th>PM1</th>
+              <th>PM2</th>
               <th>Engineer</th>
               <th>Reminders</th>
               <th>Due-soon Flags</th>
@@ -55,6 +58,8 @@ export default function EquipmentTable({
                   </td>
                   <td>{row.lastPmDate || "—"}</td>
                   <td>{row.completionDate || "—"}</td>
+                  <td>{getPmSlotStatus(row, 1)}</td>
+                  <td>{getPmSlotStatus(row, 2)}</td>
                   <td>{row.engineer}</td>
                   <td className="muted">
                     <div>R1: {row.reminder1Sent ? "Sent" : "Pending"}</div>
