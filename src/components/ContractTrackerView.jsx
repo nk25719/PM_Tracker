@@ -49,6 +49,8 @@ export default function ContractTrackerView({
               <th>Start date</th>
               <th>End date</th>
               <th>Equipment in contract</th>
+              <th>PMs required/year</th>
+              <th>PM dates</th>
               <th>Expiration</th>
               <th>Renewal reminder</th>
               <th>Contract history</th>
@@ -66,6 +68,10 @@ export default function ContractTrackerView({
                     <td>{contract.contractEndDate || "—"}</td>
                     <td className="muted">
                       {contract.equipment?.length ? `${contract.equipment.length} item(s): ${contract.equipment.join(", ")}` : "—"}
+                    </td>
+                    <td>{contract.pmRequiredTotal || "—"}</td>
+                    <td className="muted">
+                      {contract.pmDates?.length ? contract.pmDates.join(", ") : "—"}
                     </td>
                     <td>
                       <span className={timing.className}>{timing.label}</span>
@@ -88,7 +94,7 @@ export default function ContractTrackerView({
               })
             ) : (
               <tr>
-                <td colSpan={8} className="muted">
+                <td colSpan={10} className="muted">
                   No contracts found yet. Add contract start/end dates in equipment records to populate this view.
                 </td>
               </tr>

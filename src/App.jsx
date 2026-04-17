@@ -168,6 +168,22 @@ function appendContractHistoryEntry(baseHistory, rowSnapshot, note, actor) {
   ];
 }
 
+function collectPmDatesFromImport(row) {
+  const explicitPmDates = (row["PM Dates"] || row.pmDates || "")
+    .split(/[;,|]/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  const numberedPmDates = Array.from({ length: MAX_PM_PLACEHOLDERS }, (_, index) => {
+    const slot = index + 1;
+    return row[`PM${slot}`] || row[`PM ${slot}`] || row[`pm${slot}`] || "";
+  })
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  return Array.from(new Set([...explicitPmDates, ...numberedPmDates]));
+}
+
 export default function App() {
   const defaultEquipmentForm = createDefaultEquipmentForm();
 
@@ -351,12 +367,17 @@ export default function App() {
           contractEndDate: endDate,
           daysLeft,
           equipment: [],
+          pmRequiredTotal: 0,
+          pmDates: [],
           contractHistory: [],
         });
       }
       const contractRecord = contractMap.get(key);
       const equipmentLabel = [row.equipment || "Unnamed equipment", row.serial ? `(${row.serial})` : ""].join(" ").trim();
+      const pmDates = collectPmDatesFromImport(row);
       contractRecord.equipment.push(equipmentLabel);
+      contractRecord.pmRequiredTotal += Math.max(1, Number(row.pmsPerYear) || 1);
+      contractRecord.pmDates.push(...(pmDates.length ? pmDates : [row.nextPmDate].filter(Boolean)));
       contractRecord.contractHistory.push(...(row.contractHistory || []));
     });
 
@@ -365,6 +386,7 @@ export default function App() {
       .map((item) => ({
         ...item,
         equipment: Array.from(new Set(item.equipment)).sort(),
+        pmDates: Array.from(new Set(item.pmDates)).sort(),
         contractHistory: item.contractHistory
           .filter((entry) => entry.note || entry.contractNo || entry.contractEndDate || entry.contractStartDate)
           .sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0)),
@@ -449,8 +471,14 @@ export default function App() {
       .map((row) => ({
         hospital: row.Hospital || row.hospital || "",
         contractNo: row["Contract No."] || row.contractNo || row["Contract Number"] || "",
+        equipment: row.Equipment || row.equipment || row.Subsystem || row.subsystem || "",
+        model: row.Model || row.model || "",
+        serial: row["Serial Number"] || row.serial || row.Serial || "",
         contractStartDate: row["Contract Start Date"] || row.contractStartDate || "",
         contractEndDate: row["Contract End Date"] || row.contractEndDate || "",
+        pmsPerYear: Math.max(1, Number(row["PMs per Year"] || row.pmsPerYear || 1) || 1),
+        nextPmDate: row["Next PM Date"] || row.nextPmDate || "",
+        pmDates: collectPmDatesFromImport(row),
       }))
       .filter((row) => row.hospital || row.contractNo);
 
@@ -459,44 +487,131 @@ export default function App() {
       return;
     }
 
-    const contractsMap = new Map(
-      normalizedContracts.map((contract) => [`${contract.hospital}::${contract.contractNo}`, contract])
-    );
-
     setRows((current) =>
-      current.map((row) => {
-        const contractKey = `${row.hospital || ""}::${row.contractNo || ""}`;
-        const importedContract = contractsMap.get(contractKey);
-        if (!importedContract) return row;
-        const hasContractChange =
-          importedContract.contractStartDate !== row.contractStartDate ||
-          importedContract.contractEndDate !== row.contractEndDate;
-        const actor = row.updatedBy || row.engineer || "System";
-        return {
-          ...row,
-          contractStartDate: importedContract.contractStartDate,
-          contractEndDate: importedContract.contractEndDate,
-          contractHistory: hasContractChange
-            ? appendContractHistoryEntry(
-                row.contractHistory,
-                { ...row, ...importedContract },
-                "Contract dates updated from imported contracts file",
-                actor
-              )
-            : row.contractHistory || [],
-        };
-      })
+      normalizedContracts.reduce((acc, importedContract, index) => {
+        const matches = acc.filter(
+          (row) =>
+            row.hospital === importedContract.hospital &&
+            row.contractNo === importedContract.contractNo &&
+            (!importedContract.equipment || row.equipment === importedContract.equipment)
+        );
+
+        if (!matches.length) {
+          const today = getTodayIsoDate();
+          const actor = "Contracts Import";
+          const pmPlaceholders = Object.fromEntries(
+            Array.from({ length: MAX_PM_PLACEHOLDERS }, (_, slotIndex) => {
+              const slot = slotIndex + 1;
+              return [`pm${slot}Placeholder`, importedContract.pmDates[slotIndex] || ""];
+            })
+          );
+          return [
+            ...acc,
+            normalizeRows([
+              {
+                id: Date.now() + index,
+                hospital: importedContract.hospital,
+                contractNo: importedContract.contractNo,
+                equipment: importedContract.equipment || "Imported contract item",
+                model: importedContract.model,
+                serial: importedContract.serial,
+                department: "",
+                pmsPerYear: importedContract.pmsPerYear,
+                nextPmDate: importedContract.nextPmDate || importedContract.pmDates[0] || "",
+                lastPmDate: "",
+                completionDate: "",
+                reminderDates: "",
+                status: "Upcoming",
+                contractStartDate: importedContract.contractStartDate,
+                contractEndDate: importedContract.contractEndDate,
+                engineer: "",
+                contactEmail: "",
+                notes: "Created from contract import.",
+                updatedBy: actor,
+                createdDate: today,
+                updatedDate: today,
+                reminder1Sent: false,
+                reminder2Sent: false,
+                engineerAlertSent: false,
+                contractHistory: appendContractHistoryEntry(
+                  [],
+                  importedContract,
+                  "Contract imported with PM schedule",
+                  actor
+                ),
+                ...pmPlaceholders,
+              },
+            ])[0],
+          ];
+        }
+
+        return acc.map((row) => {
+          const isMatch =
+            row.hospital === importedContract.hospital &&
+            row.contractNo === importedContract.contractNo &&
+            (!importedContract.equipment || row.equipment === importedContract.equipment);
+          if (!isMatch) return row;
+
+          const hasContractChange =
+            importedContract.contractStartDate !== row.contractStartDate ||
+            importedContract.contractEndDate !== row.contractEndDate;
+          const actor = row.updatedBy || row.engineer || "System";
+          const pmPlaceholders = Object.fromEntries(
+            Array.from({ length: MAX_PM_PLACEHOLDERS }, (_, slotIndex) => {
+              const slot = slotIndex + 1;
+              const nextValue = importedContract.pmDates[slotIndex];
+              const key = `pm${slot}Placeholder`;
+              return [key, nextValue || row[key] || ""];
+            })
+          );
+
+          return {
+            ...row,
+            contractStartDate: importedContract.contractStartDate || row.contractStartDate,
+            contractEndDate: importedContract.contractEndDate || row.contractEndDate,
+            pmsPerYear: importedContract.pmsPerYear || row.pmsPerYear,
+            nextPmDate: importedContract.nextPmDate || importedContract.pmDates[0] || row.nextPmDate,
+            ...pmPlaceholders,
+            contractHistory: hasContractChange
+              ? appendContractHistoryEntry(
+                  row.contractHistory,
+                  { ...row, ...importedContract },
+                  "Contract dates updated from imported contracts file",
+                  actor
+                )
+              : row.contractHistory || [],
+          };
+        });
+      }, current)
     );
 
     event.target.value = "";
   }
 
   function exportContractsToCsv() {
-    const headers = ["Hospital", "Contract No.", "Contract Start Date", "Contract End Date", "Days Left"];
+    const headers = [
+      "Hospital",
+      "Contract No.",
+      "Contract Start Date",
+      "Contract End Date",
+      "Equipment in Contract",
+      "PMs Required (Yearly)",
+      "PM Dates",
+      "Days Left",
+    ];
     const csv = [headers.join(",")]
       .concat(
         contractRows.map((contract) =>
-          [contract.hospital, contract.contractNo, contract.contractStartDate, contract.contractEndDate, contract.daysLeft]
+          [
+            contract.hospital,
+            contract.contractNo,
+            contract.contractStartDate,
+            contract.contractEndDate,
+            contract.equipment.join(" | "),
+            contract.pmRequiredTotal,
+            contract.pmDates.join(" | "),
+            contract.daysLeft,
+          ]
             .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
             .join(",")
         )
