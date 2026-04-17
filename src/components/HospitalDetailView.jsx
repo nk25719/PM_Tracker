@@ -210,6 +210,32 @@ export default function HospitalDetailView({
     onSendHospitalEmail?.(pendingRows, "Engineer dispatch sent");
   }
 
+  function handleSendUpcomingPmNotification() {
+    const upcomingRows = selectedRows.filter((row) => {
+      const meta = getTrackingMeta(row);
+      return meta.daysUntil >= 0 && meta.daysUntil <= 14 && meta.effectiveStatus !== "Completed";
+    });
+    if (!upcomingRows.length) return;
+    onSendHospitalEmail?.(upcomingRows, "Upcoming PM notification");
+  }
+
+  function handleSendReminder() {
+    if (!pendingRows.length) return;
+    onSendHospitalEmail?.(pendingRows, "PM reminder");
+  }
+
+  function handleSendOverdueNotice() {
+    const overdueRows = selectedRows.filter((row) => getTrackingMeta(row).isOverdue && getTrackingMeta(row).effectiveStatus !== "Completed");
+    if (!overdueRows.length) return;
+    onSendHospitalEmail?.(overdueRows, "Overdue PM notice");
+  }
+
+  function handleSendCompletedPmEmail() {
+    const completedRows = selectedRows.filter((row) => getTrackingMeta(row).effectiveStatus === "Completed");
+    if (!completedRows.length) return;
+    onSendHospitalEmail?.(completedRows, "Completed PM email", { includeCompleted: true });
+  }
+
   function handleAddComment(event) {
     event.preventDefault();
     if (!commentText.trim()) return;
@@ -266,6 +292,33 @@ export default function HospitalDetailView({
           </button>
           <button className="button" onClick={handleNotifyEngineers} disabled={!pendingRows.length}>
             Notify engineers
+          </button>
+          <button
+            className="button"
+            onClick={handleSendUpcomingPmNotification}
+            disabled={!selectedRows.some((row) => {
+              const meta = getTrackingMeta(row);
+              return meta.daysUntil >= 0 && meta.daysUntil <= 14 && meta.effectiveStatus !== "Completed";
+            })}
+          >
+            Send upcoming PM notification
+          </button>
+          <button className="button" onClick={handleSendReminder} disabled={!pendingRows.length}>
+            Send reminder
+          </button>
+          <button
+            className="button"
+            onClick={handleSendOverdueNotice}
+            disabled={!selectedRows.some((row) => getTrackingMeta(row).isOverdue && getTrackingMeta(row).effectiveStatus !== "Completed")}
+          >
+            Send overdue PM notice
+          </button>
+          <button
+            className="button"
+            onClick={handleSendCompletedPmEmail}
+            disabled={!selectedRows.some((row) => getTrackingMeta(row).effectiveStatus === "Completed")}
+          >
+            Send completed PM email
           </button>
           {canEmailSelected ? (
             <a className="button button-primary" href={selectedMailTo} onClick={handleOpenEmailClient}>
