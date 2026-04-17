@@ -41,6 +41,21 @@ function normalizePmHistory(row) {
   return history;
 }
 
+function normalizeContractHistory(row) {
+  if (Array.isArray(row.contractHistory)) return row.contractHistory;
+  if (!row.contractNo && !row.contractStartDate && !row.contractEndDate) return [];
+  return [
+    {
+      at: row.updatedDate || row.createdDate || getTodayIsoDate(),
+      by: row.updatedBy || row.engineer || "System",
+      note: `Contract linked (${row.contractNo || "No contract #"})`,
+      contractNo: row.contractNo || "",
+      contractStartDate: row.contractStartDate || "",
+      contractEndDate: row.contractEndDate || "",
+    },
+  ];
+}
+
 export function normalizeRows(rows) {
   const today = getTodayIsoDate();
 
@@ -56,6 +71,7 @@ export function normalizeRows(rows) {
     updatedBy: row.updatedBy || row.engineer || "System",
     contractStartDate: row.contractStartDate || "",
     contractEndDate: row.contractEndDate || "",
+    contractHistory: normalizeContractHistory(row),
     pmHistory: normalizePmHistory(row),
     reminder1Sent: Boolean(row.reminder1Sent),
     reminder2Sent: Boolean(row.reminder2Sent),
