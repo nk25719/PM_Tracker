@@ -1,5 +1,5 @@
 import React from "react";
-import { FileText, PlusCircle, XCircle } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 
 function getContractTimingLabel(daysLeft) {
   if (daysLeft < 0) return { label: `Expired ${Math.abs(daysLeft)} day(s) ago`, className: "badge badge-overdue" };
@@ -10,12 +10,6 @@ function getContractTimingLabel(daysLeft) {
 export default function ContractTrackerView({
   contracts,
   onOpenContract,
-  contractFileInputRef,
-  onImportContracts,
-  onExportContractsCsv,
-  isAddEquipmentVisible,
-  onToggleAddEquipment,
-  addEquipmentPanel,
 }) {
   return (
     <div className="card contracts-view-card">
@@ -29,34 +23,6 @@ export default function ContractTrackerView({
         </div>
       </div>
 
-      <div className="actions contracts-actions-row">
-        <input ref={contractFileInputRef} type="file" accept=".csv" className="hidden-input" onChange={onImportContracts} />
-        <button className="button" onClick={() => contractFileInputRef.current?.click()}>
-          Import Contracts CSV
-        </button>
-        <button className="button" onClick={onExportContractsCsv}>
-          Export Contracts CSV
-        </button>
-        <button className={`button ${isAddEquipmentVisible ? "button-primary" : ""}`} onClick={onToggleAddEquipment}>
-          {isAddEquipmentVisible ? (
-            <>
-              <XCircle size={15} className="inline-icon" />
-              Close Add Equipment
-            </>
-          ) : (
-            <>
-              <PlusCircle size={15} className="inline-icon" />
-              Add Equipment in Contracts
-            </>
-          )}
-        </button>
-      </div>
-      <div className="muted contract-toggle-helper">
-        Add equipment entries from this contracts workspace to keep contract dates and coverage synced.
-      </div>
-
-      {isAddEquipmentVisible ? addEquipmentPanel : null}
-
       <div className="table-wrap">
         <table className="table">
           <thead>
@@ -66,7 +32,6 @@ export default function ContractTrackerView({
               <th>Contract period</th>
               <th>Equipment</th>
               <th>Expiration</th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -92,17 +57,12 @@ export default function ContractTrackerView({
                     <td>
                       <span className={timing.className}>{timing.label}</span>
                     </td>
-                    <td>
-                      <button className="button button-soft" onClick={() => onOpenContract(contract.id)}>
-                        Open details
-                      </button>
-                    </td>
                   </tr>
                 );
               })
             ) : (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={5} className="muted">
                   No contracts found yet. Add contract start/end dates in equipment records to populate this view.
                 </td>
               </tr>

@@ -80,6 +80,7 @@ export default function HospitalDetailView({
   const [commentBy, setCommentBy] = useState("PM Coordinator");
   const [useAiTone, setUseAiTone] = useState(true);
   const [statusFocus, setStatusFocus] = useState("All");
+  const [isStatusViewOpen, setIsStatusViewOpen] = useState(false);
 
   const selectedRows = useMemo(() => {
     if (!selectedEquipmentIds.length) return rows;
@@ -119,32 +120,6 @@ export default function HospitalDetailView({
     const total = responseHourSamples.reduce((sum, value) => sum + value, 0);
     return Math.round((total / responseHourSamples.length) * 10) / 10;
   }, [selectedRows]);
-
-  const automationQueue = useMemo(() => {
-    return [
-      {
-        id: "overdue",
-        label: "Escalation for overdue PM",
-        count: selectedRows.filter((row) => getTrackingMeta(row).isOverdue && getTrackingMeta(row).effectiveStatus !== "Completed").length,
-        action: "Send overdue PM notice",
-      },
-      {
-        id: "due-soon",
-        label: "Upcoming PM reminder (14 days)",
-        count: selectedRows.filter((row) => {
-          const meta = getTrackingMeta(row);
-          return meta.daysUntil >= 0 && meta.daysUntil <= 14 && meta.effectiveStatus !== "Completed";
-        }).length,
-        action: "Send upcoming PM notification",
-      },
-      {
-        id: "pending",
-        label: "Engineer dispatch follow-up",
-        count: pendingRows.length,
-        action: "Notify engineers",
-      },
-    ];
-  }, [selectedRows, pendingRows, getTrackingMeta]);
 
   const selectedEquipment = useMemo(
     () => (selectedRows.length === 1 ? selectedRows[0] : null),
@@ -198,34 +173,6 @@ export default function HospitalDetailView({
       ])
       .sort((a, b) => new Date(b.at || b.date || 0) - new Date(a.at || a.date || 0));
   }, [selectedRows]);
-
-  const recommendedFeatures = useMemo(() => {
-    const recommendations = [];
-    if (statusSummary.overdue > 0) {
-      recommendations.push(
-        "Enable automatic escalation routing for overdue equipment with department-specific SLA targets."
-      );
-    }
-    if ((averageResponseHours || 0) > 24) {
-      recommendations.push(
-        "Add response-time SLA alerts to notify coordinators when average hospital response exceeds 24 hours."
-      );
-    }
-    if (statusSummary.dueSoon14 > 0) {
-      recommendations.push(
-        "Activate a two-step reminder campaign (T-14 and T-3 days) with delivery tracking and retries."
-      );
-    }
-    if (!recommendations.length) {
-      recommendations.push(
-        "Integrate calendar sync for engineers and hospital contacts to auto-propose PM slots from real availability."
-      );
-      recommendations.push(
-        "Add parts-readiness checks before dispatch to reduce repeat visits and improve first-time completion."
-      );
-    }
-    return recommendations.slice(0, 4);
-  }, [statusSummary, averageResponseHours]);
 
   const displayedRows = useMemo(() => {
     if (statusFocus === "All") return selectedRows;
@@ -305,32 +252,6 @@ export default function HospitalDetailView({
     onSendHospitalEmail?.(pendingRows, "Engineer dispatch sent");
   }
 
-  function handleSendUpcomingPmNotification() {
-    const upcomingRows = selectedRows.filter((row) => {
-      const meta = getTrackingMeta(row);
-      return meta.daysUntil >= 0 && meta.daysUntil <= 14 && meta.effectiveStatus !== "Completed";
-    });
-    if (!upcomingRows.length) return;
-    onSendHospitalEmail?.(upcomingRows, "Upcoming PM notification");
-  }
-
-  function handleSendReminder() {
-    if (!pendingRows.length) return;
-    onSendHospitalEmail?.(pendingRows, "PM reminder");
-  }
-
-  function handleSendOverdueNotice() {
-    const overdueRows = selectedRows.filter((row) => getTrackingMeta(row).isOverdue && getTrackingMeta(row).effectiveStatus !== "Completed");
-    if (!overdueRows.length) return;
-    onSendHospitalEmail?.(overdueRows, "Overdue PM notice");
-  }
-
-  function handleSendCompletedPmEmail() {
-    const completedRows = selectedRows.filter((row) => getTrackingMeta(row).effectiveStatus === "Completed");
-    if (!completedRows.length) return;
-    onSendHospitalEmail?.(completedRows, "Completed PM email", { includeCompleted: true });
-  }
-
   function handleAddComment(event) {
     event.preventDefault();
     if (!commentText.trim()) return;
@@ -384,33 +305,6 @@ export default function HospitalDetailView({
           <button className="button" onClick={handleNotifyEngineers} disabled={!pendingRows.length}>
             Notify engineers
           </button>
-          <button
-            className="button"
-            onClick={handleSendUpcomingPmNotification}
-            disabled={!selectedRows.some((row) => {
-              const meta = getTrackingMeta(row);
-              return meta.daysUntil >= 0 && meta.daysUntil <= 14 && meta.effectiveStatus !== "Completed";
-            })}
-          >
-            Send upcoming PM notification
-          </button>
-          <button className="button" onClick={handleSendReminder} disabled={!pendingRows.length}>
-            Send reminder
-          </button>
-          <button
-            className="button"
-            onClick={handleSendOverdueNotice}
-            disabled={!selectedRows.some((row) => getTrackingMeta(row).isOverdue && getTrackingMeta(row).effectiveStatus !== "Completed")}
-          >
-            Send overdue PM notice
-          </button>
-          <button
-            className="button"
-            onClick={handleSendCompletedPmEmail}
-            disabled={!selectedRows.some((row) => getTrackingMeta(row).effectiveStatus === "Completed")}
-          >
-            Send completed PM email
-          </button>
           {canEmailSelected ? (
             <a className="button button-primary" href={selectedMailTo} onClick={handleOpenEmailClient}>
               <Mail size={15} className="inline-icon" />
@@ -446,34 +340,6 @@ export default function HospitalDetailView({
         </div>
       </div>
 
-      <div className="hospital-automation-and-recommendations">
-        <div className="quick-action-block">
-          <h3 className="section-title hospital-subsection-title">Automation queue</h3>
-          <div className="automation-list">
-            {automationQueue.map((item) => (
-              <div key={item.id} className="automation-item">
-                <div>
-                  <div className="strong">{item.label}</div>
-                  <div className="muted">
-                    {item.count} equipment item{item.count === 1 ? "" : "s"} ready
-                  </div>
-                </div>
-                <div className="automation-action">{item.action}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="quick-action-block">
-          <h3 className="section-title hospital-subsection-title">Recommended next features</h3>
-          <ul className="recommended-feature-list">
-            {recommendedFeatures.map((feature, index) => (
-              <li key={`${feature}-${index}`}>{feature}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
       <div className="email-draft-wrap">
         <div className="email-draft-head">
           <div className="selection-meta">Email reminder draft ({pendingRows.length} pending item{pendingRows.length === 1 ? "" : "s"})</div>
@@ -503,87 +369,6 @@ export default function HospitalDetailView({
       {quickActionFeedback ? <div className="quick-action-feedback">{quickActionFeedback}</div> : null}
 
       <div className="hospital-detail-layout">
-        <div className="hospital-status-view">
-          <div className="hospital-status-head">
-            <h3 className="section-title hospital-subsection-title">Equipment Status View</h3>
-            <div className="status-filter-row">
-              {["All", "Overdue", "DueSoon", "Completed"].map((filterKey) => (
-                <button
-                  key={filterKey}
-                  className={`button button-soft${statusFocus === filterKey ? " status-filter-active" : ""}`}
-                  onClick={() => setStatusFocus(filterKey)}
-                >
-                  {filterKey === "DueSoon" ? "Due Soon" : filterKey}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Equipment</th>
-                  <th>Department</th>
-                  <th>PM Required</th>
-                  <th>PM Done</th>
-                  <th>PM1</th>
-                  <th>PM2</th>
-                  <th>PM3</th>
-                  <th>Other PM</th>
-                  <th>Next PM</th>
-                  <th>Timing</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayedRows.length ? (
-                  displayedRows.map((row) => {
-                    const meta = getTrackingMeta(row);
-                    const requiredPmCount = Number(row.pmsPerYear) || 1;
-                    const completedPmCount = (row.pmHistory || []).filter((entry) => entry.status === "Completed").length;
-                    const pm1Status = completedPmCount >= 1 ? "Available" : "Required";
-                    const pm2Status = completedPmCount >= 2 ? "Available" : "Required";
-                    const pm3Status = completedPmCount >= 3 ? "Available" : "Required";
-                    const otherPmStatus = requiredPmCount > 3 ? `${Math.max(0, completedPmCount - 3)}/${requiredPmCount - 3} available` : "N/A";
-                    return (
-                      <tr key={row.id} className={selectedEquipmentIds.length ? "hospital-status-row-selected" : ""}>
-                        <td>
-                          <div className="strong">{row.equipment}</div>
-                          <div className="muted">{row.serial || "No serial"}</div>
-                        </td>
-                        <td>{row.department || "—"}</td>
-                        <td>{requiredPmCount}</td>
-                        <td>{completedPmCount}</td>
-                        <td>{pm1Status}</td>
-                        <td>{pm2Status}</td>
-                        <td>{pm3Status}</td>
-                        <td>{otherPmStatus}</td>
-                        <td>{row.nextPmDate || "—"}</td>
-                        <td className="muted">
-                          {meta.isOverdue
-                            ? "Overdue"
-                            : meta.dueSoon7
-                              ? "Due within 7 days"
-                              : meta.dueSoon14
-                                ? "Due within 14 days"
-                                : "On schedule"}
-                        </td>
-                        <td>{meta.effectiveStatus}</td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={11} className="muted">
-                      No equipment found for this status filter.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
         <div className="hospital-history-pane">
           <form className="comment-form" onSubmit={handleAddComment}>
             <div className="comment-form-head">
@@ -619,6 +404,98 @@ export default function HospitalDetailView({
             )}
           </div>
         </div>
+      </div>
+
+      <div className="hospital-status-view">
+        <div className="hospital-status-head">
+          <h3 className="section-title hospital-subsection-title">Equipment Status View</h3>
+          <div className="selection-buttons">
+            <button className="button button-soft" onClick={() => setIsStatusViewOpen((value) => !value)}>
+              {isStatusViewOpen ? "Hide status table" : "Show status table"}
+            </button>
+          </div>
+        </div>
+        {isStatusViewOpen ? (
+          <>
+            <div className="status-filter-row">
+              {["All", "Overdue", "DueSoon", "Completed"].map((filterKey) => (
+                <button
+                  key={filterKey}
+                  className={`button button-soft${statusFocus === filterKey ? " status-filter-active" : ""}`}
+                  onClick={() => setStatusFocus(filterKey)}
+                >
+                  {filterKey === "DueSoon" ? "Due Soon" : filterKey}
+                </button>
+              ))}
+            </div>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Equipment</th>
+                    <th>Department</th>
+                    <th>PM Required</th>
+                    <th>PM Done</th>
+                    <th>PM1</th>
+                    <th>PM2</th>
+                    <th>PM3</th>
+                    <th>Other PM</th>
+                    <th>Next PM</th>
+                    <th>Timing</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedRows.length ? (
+                    displayedRows.map((row) => {
+                      const meta = getTrackingMeta(row);
+                      const requiredPmCount = Number(row.pmsPerYear) || 1;
+                      const completedPmCount = (row.pmHistory || []).filter((entry) => entry.status === "Completed").length;
+                      const pm1Status = completedPmCount >= 1 ? "Available" : "Required";
+                      const pm2Status = completedPmCount >= 2 ? "Available" : "Required";
+                      const pm3Status = completedPmCount >= 3 ? "Available" : "Required";
+                      const otherPmStatus = requiredPmCount > 3 ? `${Math.max(0, completedPmCount - 3)}/${requiredPmCount - 3} available` : "N/A";
+                      return (
+                        <tr key={row.id} className={selectedEquipmentIds.length ? "hospital-status-row-selected" : ""}>
+                          <td>
+                            <div className="strong">{row.equipment}</div>
+                            <div className="muted">{row.serial || "No serial"}</div>
+                          </td>
+                          <td>{row.department || "—"}</td>
+                          <td>{requiredPmCount}</td>
+                          <td>{completedPmCount}</td>
+                          <td>{pm1Status}</td>
+                          <td>{pm2Status}</td>
+                          <td>{pm3Status}</td>
+                          <td>{otherPmStatus}</td>
+                          <td>{row.nextPmDate || "—"}</td>
+                          <td className="muted">
+                            {meta.isOverdue
+                              ? "Overdue"
+                              : meta.dueSoon7
+                                ? "Due within 7 days"
+                                : meta.dueSoon14
+                                  ? "Due within 14 days"
+                                  : "On schedule"}
+                          </td>
+                          <td>{meta.effectiveStatus}</td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={11} className="muted">
+                        No equipment found for this status filter.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <div className="muted">Status table is hidden to keep this view focused. Use "Show status table" when needed.</div>
+        )}
       </div>
     </div>
   );
