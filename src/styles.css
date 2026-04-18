@@ -507,6 +507,26 @@ body {
   padding-top: 10px;
 }
 
+.hospital-status-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-filter-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.status-filter-active {
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
 .hospital-detail-layout {
   display: grid;
   grid-template-columns: 1fr 1.55fr;
@@ -603,6 +623,62 @@ body {
   font-size: 13px;
 }
 
+.hospital-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.hospital-kpi-card {
+  border: 1px solid #dbe7f6;
+  border-radius: 12px;
+  padding: 10px;
+  background: #f8fbff;
+}
+
+.hospital-kpi-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.hospital-automation-and-recommendations {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.automation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.automation-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #dbe7f6;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px;
+}
+
+.automation-action {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  text-align: right;
+}
+
+.recommended-feature-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
 .contracts-view-card .table td,
 .contracts-view-card .table th {
   white-space: nowrap;
@@ -633,6 +709,11 @@ body {
   .email-draft-head {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .hospital-insight-grid,
+  .hospital-automation-and-recommendations {
+    grid-template-columns: 1fr;
   }
 
   .hospital-detail-layout {
