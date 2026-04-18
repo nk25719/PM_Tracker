@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { ArrowLeft, Bot, Building2, CheckSquare, Copy, Mail, MessageSquare, Square, Wrench } from "lucide-react";
+import { Bot, Building2, CheckSquare, Copy, Mail, MessageSquare, Square, Wrench } from "lucide-react";
 
 function buildEmailDraft(pendingRows, hospital, useAiTone = false) {
   const subject = `Preventive Maintenance Follow-up - ${hospital} (${pendingRows.length} pending item${pendingRows.length === 1 ? "" : "s"})`;
@@ -67,7 +67,6 @@ function buildAiPrompt(emailDraft, hospital) {
 export default function HospitalDetailView({
   hospital,
   rows,
-  onBack,
   getTrackingMeta,
   onSendHospitalEmail,
   onAddHospitalComment,
@@ -353,10 +352,6 @@ export default function HospitalDetailView({
             {hospital}
           </div>
         </div>
-        <button className="button" onClick={onBack}>
-          <ArrowLeft size={15} className="inline-icon" />
-          Back to dashboard
-        </button>
       </div>
 
       <div className="hospital-quick-actions compact-quick-actions">

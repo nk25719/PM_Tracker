@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, FileText, PlusCircle, XCircle } from "lucide-react";
+import { FileText, PlusCircle, XCircle } from "lucide-react";
 
 function getContractTimingLabel(daysLeft) {
   if (daysLeft < 0) return { label: `Expired ${Math.abs(daysLeft)} day(s) ago`, className: "badge badge-overdue" };
@@ -9,7 +9,6 @@ function getContractTimingLabel(daysLeft) {
 
 export default function ContractTrackerView({
   contracts,
-  onBack,
   onOpenContract,
   contractFileInputRef,
   onImportContracts,
@@ -28,10 +27,6 @@ export default function ContractTrackerView({
             Independent contract tracker with renewal reminders
           </div>
         </div>
-        <button className="button" onClick={onBack}>
-          <ArrowLeft size={15} className="inline-icon" />
-          Back to dashboard
-        </button>
       </div>
 
       <div className="actions contracts-actions-row">
