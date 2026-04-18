@@ -1144,9 +1144,6 @@ export default function App() {
           <button className={`button ${currentPage === "contracts" ? "button-primary" : ""}`} onClick={openContractsView}>
             Contracts View
           </button>
-          <button className={`button ${currentPage === "contracts" && showContractAddEquipment ? "button-primary" : ""}`} onClick={startAdd}>
-            Add Equipment
-          </button>
         </div>
 
         {currentPage === "dashboard" ? (

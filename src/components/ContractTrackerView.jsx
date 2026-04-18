@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, FileText, PlusCircle, XCircle } from "lucide-react";
 
 function getContractTimingLabel(daysLeft) {
   if (daysLeft < 0) return { label: `Expired ${Math.abs(daysLeft)} day(s) ago`, className: "badge badge-overdue" };
@@ -43,8 +43,21 @@ export default function ContractTrackerView({
           Export Contracts CSV
         </button>
         <button className={`button ${isAddEquipmentVisible ? "button-primary" : ""}`} onClick={onToggleAddEquipment}>
-          {isAddEquipmentVisible ? "Hide Add Equipment" : "Show Add Equipment"}
+          {isAddEquipmentVisible ? (
+            <>
+              <XCircle size={15} className="inline-icon" />
+              Close Add Equipment
+            </>
+          ) : (
+            <>
+              <PlusCircle size={15} className="inline-icon" />
+              Add Equipment in Contracts
+            </>
+          )}
         </button>
+      </div>
+      <div className="muted contract-toggle-helper">
+        Add equipment entries from this contracts workspace to keep contract dates and coverage synced.
       </div>
 
       {isAddEquipmentVisible ? addEquipmentPanel : null}
