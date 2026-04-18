@@ -450,12 +450,6 @@ export default function App() {
     setCurrentPage("contracts");
   }
 
-  function closeContractsView() {
-    setCurrentPage("dashboard");
-    setSelectedContractId(null);
-    setShowContractAddEquipment(false);
-  }
-
   function openContractDetail(contractId) {
     setSelectedContractId(contractId);
     setContractEquipmentDraft({
@@ -1196,14 +1190,18 @@ export default function App() {
             <p className="subtitle">User-friendly PM dashboard with CSV/Excel import, COM history, and reminder tracking.</p>
           </div>
 
-          <ImportExportBar
-            fileInputRef={fileInputRef}
-            onImportChange={handleImportFile}
-            onExportCsv={() => exportRowsToCsv(rows, getIntervalMonths)}
-          />
+          {currentPage === "dashboard" ? (
+            <ImportExportBar
+              fileInputRef={fileInputRef}
+              onImportChange={handleImportFile}
+              onExportCsv={() => exportRowsToCsv(rows, getIntervalMonths)}
+            />
+          ) : null}
         </div>
 
-        <DashboardCards metrics={metrics} timingFilter={timingFilter} onMetricFilterSelect={handleMetricFilterSelect} />
+        {currentPage === "dashboard" ? (
+          <DashboardCards metrics={metrics} timingFilter={timingFilter} onMetricFilterSelect={handleMetricFilterSelect} />
+        ) : null}
         <div className="view-toggle-row">
           <button className={`button ${currentPage === "dashboard" ? "button-primary" : ""}`} onClick={() => setCurrentPage("dashboard")}>
             Dashboard
@@ -1238,7 +1236,6 @@ export default function App() {
             hospital={selectedHospitalDetail}
             rows={hospitalDetailRows}
             getTrackingMeta={getTrackingMeta}
-            onBack={() => setCurrentPage("hospital-status")}
             onSendHospitalEmail={handleHospitalEmailQuickAction}
             onAddHospitalComment={handleAddHospitalComment}
             quickActionFeedback={quickActionFeedback}
@@ -1248,7 +1245,6 @@ export default function App() {
         ) : currentPage === "contracts" ? (
           <ContractTrackerView
             contracts={contractRows}
-            onBack={closeContractsView}
             onOpenContract={openContractDetail}
             contractFileInputRef={contractFileInputRef}
             onImportContracts={handleImportContractsFile}

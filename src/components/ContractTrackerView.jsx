@@ -9,7 +9,6 @@ function getContractTimingLabel(daysLeft) {
 
 export default function ContractTrackerView({
   contracts,
-  onBack,
   onOpenContract,
 }) {
   return (
@@ -22,10 +21,6 @@ export default function ContractTrackerView({
             Independent contract tracker with renewal reminders
           </div>
         </div>
-        <button className="button" onClick={onBack}>
-          <ArrowLeft size={15} className="inline-icon" />
-          Back to dashboard
-        </button>
       </div>
 
       <div className="table-wrap">
