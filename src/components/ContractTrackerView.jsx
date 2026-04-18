@@ -68,15 +68,10 @@ export default function ContractTrackerView({
             <tr>
               <th>Hospital</th>
               <th>Contract #</th>
-              <th>Start date</th>
-              <th>End date</th>
-              <th>Equipment in contract</th>
-              <th>PMs required/year</th>
-              <th>PM dates</th>
+              <th>Contract period</th>
+              <th>Equipment</th>
               <th>Expiration</th>
-              <th>Renewal reminder</th>
-              <th>Contract history</th>
-              <th>Details</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -86,35 +81,25 @@ export default function ContractTrackerView({
                 return (
                   <tr key={contract.id}>
                     <td className="strong">{contract.hospital || "—"}</td>
-                    <td>{contract.contractNo || "—"}</td>
-                    <td>{contract.contractStartDate || "—"}</td>
-                    <td>{contract.contractEndDate || "—"}</td>
-                    <td className="muted">
-                      {contract.equipment?.length ? `${contract.equipment.length} item(s): ${contract.equipment.join(", ")}` : "—"}
+                    <td>
+                      <button className="button button-soft" onClick={() => onOpenContract(contract.id)}>
+                        {contract.contractNo || "View contract"}
+                      </button>
                     </td>
-                    <td>{contract.pmRequiredTotal || "—"}</td>
                     <td className="muted">
-                      {contract.pmDates?.length ? contract.pmDates.join(", ") : "—"}
+                      {contract.contractStartDate || "—"} to {contract.contractEndDate || "—"}
+                    </td>
+                    <td className="muted">
+                      {contract.equipment?.length
+                        ? `${contract.equipment.length} item(s) linked`
+                        : "No equipment linked yet"}
                     </td>
                     <td>
                       <span className={timing.className}>{timing.label}</span>
                     </td>
-                    <td className="muted">
-                      {contract.daysLeft <= 30
-                        ? "Send renewal follow-up now."
-                        : "No immediate action needed."}
-                    </td>
-                    <td className="muted">
-                      {contract.contractHistory?.length
-                        ? contract.contractHistory
-                            .slice(0, 3)
-                            .map((entry) => `${entry.at ? entry.at.slice(0, 10) : "Unknown"} - ${entry.note || "Updated"}`)
-                            .join(" | ")
-                        : "No contract history yet"}
-                    </td>
                     <td>
                       <button className="button button-soft" onClick={() => onOpenContract(contract.id)}>
-                        View contract
+                        Open details
                       </button>
                     </td>
                   </tr>
@@ -122,7 +107,7 @@ export default function ContractTrackerView({
               })
             ) : (
               <tr>
-                <td colSpan={11} className="muted">
+                <td colSpan={6} className="muted">
                   No contracts found yet. Add contract start/end dates in equipment records to populate this view.
                 </td>
               </tr>

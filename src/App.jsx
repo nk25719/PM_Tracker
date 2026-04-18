@@ -220,6 +220,14 @@ export default function App() {
   const [reminderWindow, setReminderWindow] = useState("next-week");
   const [reminderScheduleAt, setReminderScheduleAt] = useState("");
   const [quickActionFeedback, setQuickActionFeedback] = useState("");
+  const [contractEquipmentDraft, setContractEquipmentDraft] = useState({
+    equipment: "",
+    serial: "",
+    model: "",
+    department: "",
+    pmsPerYear: 1,
+    nextPmDate: "",
+  });
   const fileInputRef = useRef(null);
   const contractFileInputRef = useRef(null);
 
@@ -450,7 +458,69 @@ export default function App() {
 
   function openContractDetail(contractId) {
     setSelectedContractId(contractId);
+    setContractEquipmentDraft({
+      equipment: "",
+      serial: "",
+      model: "",
+      department: "",
+      pmsPerYear: 1,
+      nextPmDate: "",
+    });
     setCurrentPage("contract-detail");
+  }
+
+  function handleContractEquipmentDraftChange(field, value) {
+    setContractEquipmentDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function handleAddEquipmentToContract(contractId, draft) {
+    const targetContract = contractRows.find((contract) => contract.id === contractId);
+    if (!targetContract || !String(draft.equipment || "").trim()) return;
+
+    const today = getTodayIsoDate();
+    const actor = "Contract Editor";
+    setRows((current) => [
+      {
+        id: Date.now(),
+        hospital: targetContract.hospital,
+        contractNo: targetContract.contractNo,
+        contractStartDate: targetContract.contractStartDate,
+        contractEndDate: targetContract.contractEndDate,
+        equipment: draft.equipment.trim(),
+        serial: String(draft.serial || "").trim(),
+        model: String(draft.model || "").trim(),
+        department: String(draft.department || "").trim(),
+        pmsPerYear: Math.max(1, Number(draft.pmsPerYear) || 1),
+        nextPmDate: draft.nextPmDate || "",
+        status: "Upcoming",
+        reminderDates: "",
+        reminder1Sent: false,
+        reminder2Sent: false,
+        engineerAlertSent: false,
+        notes: "Added from contract details view.",
+        pmHistory: [],
+        contractHistory: appendContractHistoryEntry([], targetContract, "Equipment added from contract detail view", actor),
+        createdDate: today,
+        updatedDate: today,
+        updatedBy: actor,
+        engineer: "",
+        contactEmail: "",
+      },
+      ...current,
+    ]);
+
+    setContractEquipmentDraft({
+      equipment: "",
+      serial: "",
+      model: "",
+      department: "",
+      pmsPerYear: 1,
+      nextPmDate: "",
+    });
+  }
+
+  function handleRemoveEquipmentFromContract(rowId) {
+    setRows((current) => current.filter((row) => row.id !== rowId));
   }
 
   async function handleImportFile(event) {
@@ -1270,10 +1340,24 @@ export default function App() {
             }
           />
         ) : currentPage === "contract-detail" ? (
+          (() => {
+            const activeContract = contractRows.find((contract) => contract.id === selectedContractId);
+            const activeContractRows = rows.filter(
+              (row) =>
+                `${row.hospital || ""}::${row.contractNo || ""}` === selectedContractId
+            );
+            return (
           <ContractDetailView
-            contract={contractRows.find((contract) => contract.id === selectedContractId)}
+            contract={activeContract}
+            contractRows={activeContractRows}
+            addEquipmentDraft={contractEquipmentDraft}
+            onAddEquipmentDraftChange={handleContractEquipmentDraftChange}
+            onAddEquipmentToContract={handleAddEquipmentToContract}
+            onRemoveEquipmentFromContract={handleRemoveEquipmentFromContract}
             onBack={() => setCurrentPage("contracts")}
           />
+            );
+          })()
         ) : (
           <EquipmentTable
             rows={filteredRows}
